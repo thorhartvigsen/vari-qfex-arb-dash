@@ -1,6 +1,8 @@
 "use client";
 
+import { Suspense } from "react";
 import PairCard from "@/components/PairCard";
+import SiteNav from "@/components/SiteNav";
 import ThemeToggle from "@/components/ThemeToggle";
 import { usePositions } from "@/hooks/usePositions";
 import { useQfexBooks } from "@/hooks/useQfexBooks";
@@ -25,6 +27,9 @@ export default function Dashboard() {
       <header className="space-y-3">
         <div className="flex items-start justify-between gap-4">
           <div className="space-y-2">
+            <Suspense fallback={null}>
+              <SiteNav />
+            </Suspense>
             <p
               className="text-3xl font-semibold sm:text-4xl"
               style={{ color: "var(--arb-light)" }}

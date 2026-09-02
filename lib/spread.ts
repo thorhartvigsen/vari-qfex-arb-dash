@@ -141,7 +141,7 @@ export function hedgeAdvice(spreads: HedgeSpreads): string {
     return "Pick opposite sides (one long, one short) to price an arb.";
   }
   if (spreads.entry === null) {
-    return "Fill in both entries to lock your spread vs live exit and add.";
+    return "Need an open position on both venues to lock your spread vs live exit and add.";
   }
   const parts: string[] = [];
   if (spreads.pnl !== null) {
