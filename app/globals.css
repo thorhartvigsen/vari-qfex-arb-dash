@@ -1,0 +1,90 @@
+@import "tailwindcss";
+
+:root,
+[data-theme="night"] {
+  color-scheme: dark;
+  --arb-bg: #324c39;
+  --arb-panel: #3a5642;
+  --arb-panel-soft: #3f5c47;
+  --arb-light: #f3f2e9;
+  --arb-text: #ffffff;
+  --arb-muted: #ffffff;
+  --arb-border: rgba(255, 255, 255, 0.18);
+  --arb-qfex: #c4b49a;
+  --arb-xyz: #8fbf9a;
+  --arb-btn-fg: #324c39;
+  --arb-grid: rgba(243, 242, 233, 0.12);
+  --arb-positive: #9dcea8;
+  --arb-negative: #e0a090;
+}
+
+[data-theme="day"] {
+  color-scheme: light;
+  --arb-bg: #f3f2e9;
+  --arb-panel: #ebe8dc;
+  --arb-panel-soft: #e3dfd0;
+  --arb-light: #324c39;
+  --arb-text: #324c39;
+  --arb-muted: #324c39;
+  --arb-border: rgba(50, 76, 57, 0.22);
+  --arb-qfex: #6b5a45;
+  --arb-xyz: #2f6f4e;
+  --arb-btn-fg: #f3f2e9;
+  --arb-grid: rgba(50, 76, 57, 0.12);
+  --arb-positive: #2f6f4e;
+  --arb-negative: #c45c4a;
+}
+
+body {
+  font-family:
+    var(--font-plex-sans),
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
+  background-color: var(--arb-bg);
+  color: var(--arb-text);
+  transition:
+    background-color 0.25s ease,
+    color 0.25s ease;
+}
+
+.font-mono {
+  font-family: var(--font-plex-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+input[type="text"],
+input[type="number"] {
+  font-family: var(--font-plex-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+button,
+[role="button"],
+a {
+  cursor: pointer;
+}
+
+button:disabled,
+[aria-disabled="true"] {
+  cursor: not-allowed;
+}
+
+::selection {
+  background: rgba(50, 76, 57, 0.25);
+}
+
+[data-theme="night"] ::selection {
+  background: rgba(243, 242, 233, 0.25);
+}
+
+input::-webkit-outer-spin-button,
+input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+input[type="number"] {
+  -moz-appearance: textfield;
+}
