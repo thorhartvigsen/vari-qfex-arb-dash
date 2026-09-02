@@ -109,20 +109,26 @@ function QuoteColumn({
           {subtitle}
         </p>
       </div>
-      <div className="grid grid-cols-2 gap-2">
-        <div>
+      <div className="grid grid-cols-2 gap-x-8 gap-y-1">
+        <div className="min-w-0">
           <p className="text-xs uppercase tracking-wide" style={{ opacity: 0.7 }}>
             Bid
           </p>
-          <p className="font-mono text-xl" style={{ color: "var(--arb-xyz)" }}>
+          <p
+            className="font-mono text-sm tabular-nums leading-tight sm:text-base"
+            style={{ color: "var(--arb-xyz)" }}
+          >
             {formatPrice(bid, decimals)}
           </p>
         </div>
-        <div>
+        <div className="min-w-0">
           <p className="text-xs uppercase tracking-wide" style={{ opacity: 0.7 }}>
             Ask
           </p>
-          <p className="font-mono text-xl" style={{ color: "var(--arb-qfex)" }}>
+          <p
+            className="font-mono text-sm tabular-nums leading-tight sm:text-base"
+            style={{ color: "var(--arb-qfex)" }}
+          >
             {formatPrice(ask, decimals)}
           </p>
         </div>
