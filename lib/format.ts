@@ -55,6 +55,14 @@ export function formatClock(ts: number | null | undefined): string {
   });
 }
 
+export function formatAge(ts: number | null | undefined, now = Date.now()): string {
+  if (!ts || !Number.isFinite(ts)) return "—";
+  const seconds = Math.max(0, Math.round((now - ts) / 1000));
+  if (seconds < 60) return `${seconds}s ago`;
+  const minutes = Math.floor(seconds / 60);
+  return `${minutes}m ${seconds % 60}s ago`;
+}
+
 export function parsePrice(raw: string): number | null {
   const cleaned = raw.trim().replace(/,/g, "");
   if (!cleaned) return null;

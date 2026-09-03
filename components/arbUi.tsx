@@ -1,6 +1,6 @@
 "use client";
 
-import { formatPrice, formatSigned, formatSpreadBps } from "@/lib/format";
+import { formatAge, formatPrice, formatSigned, formatSpreadBps } from "@/lib/format";
 import type { Bbo } from "@/lib/types";
 
 export function tone(value: number | null | undefined, invert = false): string {
@@ -61,12 +61,14 @@ export function QuoteColumn({
   book,
   decimals,
   accent,
+  showAge = false,
 }: {
   title: string;
   subtitle: string;
   book: Bbo | undefined;
   decimals: number;
   accent: string;
+  showAge?: boolean;
 }) {
   const bid = book?.bid ?? null;
   const ask = book?.ask ?? null;
@@ -76,6 +78,8 @@ export function QuoteColumn({
     bid !== null && ask !== null && mid && mid > 0
       ? ((ask - bid) / mid) * 10_000
       : null;
+  const ageLabel =
+    showAge && book?.updatedAt ? formatAge(book.updatedAt) : null;
 
   return (
     <div className="min-w-0 flex-1 space-y-3">
@@ -84,7 +88,7 @@ export function QuoteColumn({
           {title}
         </p>
         <p className="text-xs" style={{ color: "var(--arb-text)", opacity: 0.75 }}>
-          {subtitle}
+          {ageLabel ? `${subtitle} · ${ageLabel}` : subtitle}
         </p>
       </div>
       <div className="grid grid-cols-2 gap-x-8 gap-y-1">

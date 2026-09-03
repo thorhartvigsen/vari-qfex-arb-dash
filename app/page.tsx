@@ -7,7 +7,7 @@ import ThemeToggle from "@/components/ThemeToggle";
 import { usePositions } from "@/hooks/usePositions";
 import { useQfexBooks } from "@/hooks/useQfexBooks";
 import { useVariationalQuotes } from "@/hooks/useVariationalQuotes";
-import { formatClock } from "@/lib/format";
+import { formatAge } from "@/lib/format";
 import { PAIR_IDS, PAIRS } from "@/lib/types";
 
 const VAR_TICKERS = PAIR_IDS.map((id) => PAIRS[id].varTicker);
@@ -21,6 +21,10 @@ export default function Dashboard() {
   const { positions, update, clear } = usePositions();
 
   const errors = [varError, qfexError].filter(Boolean);
+  const quoteTimes = Object.values(varQuotes)
+    .map((quote) => quote.updatedAt)
+    .filter((ts): ts is number => typeof ts === "number" && Number.isFinite(ts));
+  const oldestQuoteAt = quoteTimes.length ? Math.min(...quoteTimes) : null;
 
   return (
     <main className="mx-auto flex min-h-screen max-w-6xl flex-col gap-8 px-4 py-8 sm:px-6">
@@ -40,9 +44,13 @@ export default function Dashboard() {
               Gold, US100, and US500 swap books vs QFEX · entry, exit, and add-size spreads
             </p>
             <p className="text-xs" style={{ opacity: 0.75 }}>
-              Variational {formatClock(fetchedAt)}
+              Variational quotes {formatAge(oldestQuoteAt ?? fetchedAt)}
               {"  ·  "}
               QFEX {connected ? "live" : "connecting"}
+            </p>
+            <p className="text-xs" style={{ opacity: 0.55 }}>
+              Variational has no public live feed — stats quotes refresh about every
+              10–50s on their side
             </p>
           </div>
           <ThemeToggle />

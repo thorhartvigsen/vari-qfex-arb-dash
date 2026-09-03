@@ -5,6 +5,7 @@ interface VariationalListing {
   name?: string;
   mark_price?: string;
   quotes?: {
+    updated_at?: string;
     base?: { bid?: string; ask?: string };
     size_1k?: { bid?: string; ask?: string };
   };
@@ -16,14 +17,21 @@ function num(value: string | undefined): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-export async function fetchVariationalListings(
+function parseTs(value: string | undefined): number | null {
+  if (!value) return null;
+  const ts = Date.parse(value);
+  return Number.isFinite(ts) ? ts : null;
+}
+
+/** Cloudflare caches /metadata/stats for 30–60s unless the URL is unique. */
+export function variationalStatsUrl(): string {
+  return `${VARIATIONAL_STATS_URL}?t=${Date.now()}`;
+}
+
+export function listingsFromStats(
+  json: { listings?: VariationalListing[] },
   tickers: string[],
-): Promise<Record<string, Bbo>> {
-  const response = await fetch(VARIATIONAL_STATS_URL, { cache: "no-store" });
-  if (!response.ok) {
-    throw new Error(`Variational stats failed (${response.status})`);
-  }
-  const json = (await response.json()) as { listings?: VariationalListing[] };
+): Record<string, Bbo> {
   const want = new Set(tickers);
   const out: Record<string, Bbo> = {};
 
@@ -35,9 +43,28 @@ export async function fetchVariationalListings(
       bid: num(quote?.bid),
       ask: num(quote?.ask),
       mark: num(listing.mark_price),
-      updatedAt: Date.now(),
+      updatedAt: parseTs(listing.quotes?.updated_at),
     };
   }
 
   return out;
+}
+
+export async function fetchVariationalListings(
+  tickers: string[],
+  init?: RequestInit,
+): Promise<Record<string, Bbo>> {
+  const response = await fetch(variationalStatsUrl(), {
+    cache: "no-store",
+    headers: {
+      "Cache-Control": "no-cache",
+      Pragma: "no-cache",
+    },
+    ...init,
+  });
+  if (!response.ok) {
+    throw new Error(`Variational stats failed (${response.status})`);
+  }
+  const json = (await response.json()) as { listings?: VariationalListing[] };
+  return listingsFromStats(json, tickers);
 }

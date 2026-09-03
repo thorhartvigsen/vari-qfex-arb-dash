@@ -76,6 +76,7 @@ export default function PairCard({
           book={varBook}
           decimals={pair.priceDecimals}
           accent="var(--arb-xyz)"
+          showAge
         />
         <div
           className="hidden w-px sm:block"

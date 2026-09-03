@@ -2,8 +2,25 @@
 
 import { useEffect, useState } from "react";
 import type { Bbo } from "@/lib/types";
+import { fetchVariationalListings } from "@/lib/variational";
 
-const POLL_MS = 4_000;
+/** Stats API allows 10 requests / 10s. Stay under that. */
+const POLL_MS = 1_500;
+
+async function fetchViaProxy(tickers: string[]): Promise<Record<string, Bbo>> {
+  const response = await fetch(`/api/variational?t=${Date.now()}`, {
+    cache: "no-store",
+  });
+  const json = (await response.json()) as {
+    ok: boolean;
+    error?: string;
+    listings?: Record<string, Bbo>;
+  };
+  if (!response.ok || !json.ok) {
+    throw new Error(json.error ?? `Variational ${response.status}`);
+  }
+  return json.listings ?? {};
+}
 
 export function useVariationalQuotes(tickers: string[]): {
   quotes: Record<string, Bbo>;
@@ -18,22 +35,19 @@ export function useVariationalQuotes(tickers: string[]): {
   useEffect(() => {
     let cancelled = false;
     let timer: number | undefined;
+    const wanted = key.split(",").filter(Boolean);
 
     async function tick() {
       try {
-        const response = await fetch("/api/variational", { cache: "no-store" });
-        const json = (await response.json()) as {
-          ok: boolean;
-          error?: string;
-          fetchedAt?: number;
-          listings?: Record<string, Bbo>;
-        };
-        if (!response.ok || !json.ok) {
-          throw new Error(json.error ?? `Variational ${response.status}`);
+        let listings: Record<string, Bbo>;
+        try {
+          listings = await fetchVariationalListings(wanted);
+        } catch {
+          listings = await fetchViaProxy(wanted);
         }
         if (!cancelled) {
-          setQuotes(json.listings ?? {});
-          setFetchedAt(json.fetchedAt ?? Date.now());
+          setQuotes(listings);
+          setFetchedAt(Date.now());
           setError(null);
         }
       } catch (err) {
