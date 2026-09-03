@@ -16,6 +16,7 @@ function emptyPositions(): Positions {
   return {
     gold: { ...DEFAULT_POSITION },
     us100: { ...DEFAULT_POSITION },
+    us500: { ...DEFAULT_POSITION },
   };
 }
 

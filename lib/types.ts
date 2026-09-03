@@ -16,7 +16,7 @@ export const THEME = {
   negative: "var(--arb-negative)",
 } as const;
 
-export const PAIR_IDS = ["gold", "us100"] as const;
+export const PAIR_IDS = ["gold", "us100", "us500"] as const;
 export type PairId = (typeof PAIR_IDS)[number];
 
 export type Side = "long" | "short";
@@ -58,6 +58,16 @@ export const PAIRS: Record<PairId, PairConfig> = {
     varName: "Variational US100S",
     qfexSymbol: "US100-USD",
     qfexLabel: "QFEX US100-USD",
+    priceDecimals: 2,
+  },
+  us500: {
+    id: "us500",
+    label: "US500",
+    title: "US500 — US500S vs US500-USD",
+    varTicker: "US500S",
+    varName: "Variational US500S",
+    qfexSymbol: "US500-USD",
+    qfexLabel: "QFEX US500-USD",
     priceDecimals: 2,
   },
 };

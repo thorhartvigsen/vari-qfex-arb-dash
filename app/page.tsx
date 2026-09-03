@@ -37,7 +37,7 @@ export default function Dashboard() {
               Variational × QFEX
             </p>
             <p className="text-sm" style={{ color: "var(--arb-text)" }}>
-              Gold and US100 swap books vs QFEX · entry, exit, and add-size spreads
+              Gold, US100, and US500 swap books vs QFEX · entry, exit, and add-size spreads
             </p>
             <p className="text-xs" style={{ opacity: 0.75 }}>
               Variational {formatClock(fetchedAt)}
