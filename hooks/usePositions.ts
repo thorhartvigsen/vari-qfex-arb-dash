@@ -13,11 +13,9 @@ const STORAGE_KEY = "vari-qfex-arb/positions";
 type Positions = Record<PairId, PairPosition>;
 
 function emptyPositions(): Positions {
-  return {
-    gold: { ...DEFAULT_POSITION },
-    us100: { ...DEFAULT_POSITION },
-    us500: { ...DEFAULT_POSITION },
-  };
+  return Object.fromEntries(
+    PAIR_IDS.map((id) => [id, { ...DEFAULT_POSITION }]),
+  ) as Positions;
 }
 
 function parseStored(raw: string | null): Positions {

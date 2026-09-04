@@ -17,7 +17,7 @@ const plexMono = IBM_Plex_Mono({
 
 export const metadata: Metadata = {
   title: "Variational × QFEX",
-  description: "XAUS and US100S swap arb vs QFEX gold and US100",
+  description: "XAUS, XAGS, US100S, and US500S swap arb vs QFEX",
 };
 
 export default function RootLayout({

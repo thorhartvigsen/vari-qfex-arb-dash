@@ -16,7 +16,7 @@ export const THEME = {
   negative: "var(--arb-negative)",
 } as const;
 
-export const PAIR_IDS = ["gold", "us100", "us500"] as const;
+export const PAIR_IDS = ["gold", "silver", "us100", "us500"] as const;
 export type PairId = (typeof PAIR_IDS)[number];
 
 export type Side = "long" | "short";
@@ -49,6 +49,16 @@ export const PAIRS: Record<PairId, PairConfig> = {
     qfexSymbol: "GOLD-USD",
     qfexLabel: "QFEX GOLD-USD",
     priceDecimals: 2,
+  },
+  silver: {
+    id: "silver",
+    label: "Silver",
+    title: "Silver — XAGS vs SILVER-USD",
+    varTicker: "XAGS",
+    varName: "Variational XAGS",
+    qfexSymbol: "SILVER-USD",
+    qfexLabel: "QFEX SILVER-USD",
+    priceDecimals: 3,
   },
   us100: {
     id: "us100",

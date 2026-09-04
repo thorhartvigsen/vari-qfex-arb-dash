@@ -11,7 +11,7 @@ import { formatAge } from "@/lib/format";
 import { PAIR_IDS, PAIRS } from "@/lib/types";
 
 const VAR_TICKERS = PAIR_IDS.map((id) => PAIRS[id].varTicker);
-const QFEX_SYMBOLS = PAIR_IDS.map((id) => PAIRS[id].qfexSymbol);
+const QFEX_SYMBOLS = [...new Set(PAIR_IDS.map((id) => PAIRS[id].qfexSymbol))];
 
 export default function Dashboard() {
   const { quotes: varQuotes, error: varError, fetchedAt } =
@@ -41,7 +41,7 @@ export default function Dashboard() {
               Variational × QFEX
             </p>
             <p className="text-sm" style={{ color: "var(--arb-text)" }}>
-              Gold, US100, and US500 swap books vs QFEX · entry, exit, and add-size spreads
+              Gold, silver, US100, and US500 swap books vs QFEX · entry, exit, and add-size spreads
             </p>
             <p className="text-xs" style={{ opacity: 0.75 }}>
               Variational quotes {formatAge(oldestQuoteAt ?? fetchedAt)}
