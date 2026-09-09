@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 
 export const metadata: Metadata = {
   title: "QFEX × Entropy",
-  description: "NBIS and SNDK arb: QFEX vs Hyperliquid io",
+  description: "NBIS, SNDK, OAI, and ANTH arb: QFEX vs Hyperliquid io",
 };
 
 export default function EntropyLayout({

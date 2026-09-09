@@ -14,6 +14,7 @@ export const THEME = {
   accent: "#e8e4d4",
   positive: "var(--arb-positive)",
   negative: "var(--arb-negative)",
+  grid: "var(--arb-grid)",
 } as const;
 
 export const PAIR_IDS = ["gold", "silver", "us100", "us500"] as const;

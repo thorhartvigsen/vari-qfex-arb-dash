@@ -45,6 +45,15 @@ export function formatSpreadBps(value: number | null | undefined): string {
   return formatSigned(value, 2, " bps");
 }
 
+export function formatChartTime(ts: number): string {
+  return new Date(ts).toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 export function formatClock(ts: number | null | undefined): string {
   if (!ts || !Number.isFinite(ts)) return "—";
   return new Date(ts).toLocaleTimeString(undefined, {
