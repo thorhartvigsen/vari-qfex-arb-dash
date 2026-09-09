@@ -235,7 +235,7 @@ export async function fetchSpreadHistory(
       time,
       qfex: qfexPx,
       entropy: entropyPx,
-      spreadBps: ((qfexPx - entropyPx) / entropyPx) * 10_000,
+      spreadBps: ((entropyPx - qfexPx) / qfexPx) * 10_000,
     });
   }
 

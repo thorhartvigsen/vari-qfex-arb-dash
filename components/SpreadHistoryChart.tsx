@@ -145,7 +145,7 @@ export default function SpreadHistoryChart({
         </ResponsiveContainer>
       </div>
       <p className="text-xs" style={{ color: "var(--arb-text)", opacity: 0.7 }}>
-        1-minute closes · bps = 10,000 × (QFEX − Entropy) / Entropy
+        1-minute closes · bps = 10,000 × (Entropy − QFEX) / QFEX
         {note ? `  ·  ${note}` : ""}
       </p>
     </div>
