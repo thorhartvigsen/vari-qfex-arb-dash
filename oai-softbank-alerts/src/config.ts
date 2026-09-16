@@ -1,0 +1,70 @@
+export const HL_INFO = "https://api.hyperliquid.xyz/info";
+export const OAI_COIN = "io:OAI";
+export const SB_COIN = "xyz:SOFTBANK";
+export const LISTING_MS = Date.parse("2026-09-02T13:00:00.000Z");
+
+export const FALLBACK_OAI_BASE = 1151.8;
+export const FALLBACK_SB_BASE = 31.235;
+
+export const CONVERGE_PP = 8;
+export const UPPER_PP = 18;
+export const LOWER_PP = -2;
+
+export function envString(name: string, fallback = ""): string {
+  return (process.env[name] ?? fallback).trim();
+}
+
+export function envNumber(name: string, fallback: number): number {
+  const raw = Number(process.env[name]);
+  return Number.isFinite(raw) && raw > 0 ? raw : fallback;
+}
+
+export function telegramBotToken(): string {
+  return envString("TELEGRAM_BOT_TOKEN");
+}
+
+export function telegramChatId(): string {
+  return envString("TELEGRAM_CHAT_ID", "-5462179063");
+}
+
+export function pollMs(): number {
+  return Math.max(500, envNumber("POLL_MS", 2_000));
+}
+
+export function hysteresisPp(): number {
+  const raw = Number(process.env.HYSTERESIS_PP);
+  return Number.isFinite(raw) && raw >= 0 ? raw : 0.75;
+}
+
+export function healthPort(): number {
+  return envNumber("PORT", 8080);
+}
+
+export function listingSpreadPp(
+  oaiPx: number,
+  sbPx: number,
+  oaiBase: number,
+  sbBase: number,
+): number | null {
+  if (!(oaiPx > 0 && sbPx > 0 && oaiBase > 0 && sbBase > 0)) return null;
+  return 100 * (oaiPx / oaiBase - 1) - 100 * (sbPx / sbBase - 1);
+}
+
+export function bookMid(bid: number | null, ask: number | null): number | null {
+  if (bid != null && ask != null && bid > 0 && ask > 0) return (bid + ask) / 2;
+  if (bid != null && bid > 0) return bid;
+  if (ask != null && ask > 0) return ask;
+  return null;
+}
+
+export function fmtPp(n: number): string {
+  const sign = n > 0 ? "+" : "";
+  return `${sign}${n.toFixed(1)} pp`;
+}
+
+export function fmtPx(n: number, decimals: number): string {
+  return n.toLocaleString("en-US", {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  });
+}

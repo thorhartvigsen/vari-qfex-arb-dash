@@ -1,0 +1,10 @@
+# Railway: use Dockerfile so we don't depend on Railpack/ghcr.io.
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+startCommand = "npm start"
+restartPolicyType = "ALWAYS"
+# No HTTP healthcheck — this is a worker. Bind PORT yourself so Railway
+# is happy; probing the wrong port SIGTERM'd the trader.

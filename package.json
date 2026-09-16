@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "alerts": "npm start --prefix oai-softbank-alerts",
+    "alerts:once": "npm run once --prefix oai-softbank-alerts"
   },
   "dependencies": {
     "@vercel/analytics": "^2.0.1",
