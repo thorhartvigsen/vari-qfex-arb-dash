@@ -159,7 +159,7 @@ export default function OaiSoftbankChart({
                     : row?.live
                       ? "  ·  live mid"
                       : "";
-                return [`${formatPp(spread, 1)}${extra}`, "Spread"];
+                return [`${formatPp(spread, 3)}${extra}`, "Spread"];
               }}
             />
             <ReferenceLine

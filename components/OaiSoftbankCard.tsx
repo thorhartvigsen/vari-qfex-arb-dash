@@ -103,7 +103,7 @@ function PpMetric({
         {label}
       </p>
       <p className="font-mono text-2xl font-medium leading-none" style={{ color }}>
-        {formatPp(value, 1)}
+        {formatPp(value, 3)}
       </p>
       <p className="text-xs" style={{ color: "var(--arb-text)", opacity: 0.8 }}>
         {caption}
@@ -135,7 +135,7 @@ function BookRow({
         {label}
       </p>
       <p className="font-mono text-base" style={{ color: tone(value) }}>
-        {formatPp(value, 1)}
+        {formatPp(value, 3)}
       </p>
       <p className="text-xs" style={{ opacity: 0.7 }}>
         {caption}
@@ -218,12 +218,12 @@ export default function OaiSoftbankCard({
             className="font-mono text-2xl font-medium leading-none"
             style={{ color: tone(vsMid) }}
           >
-            {formatPp(liveMid, 1)}
+            {formatPp(liveMid)}
           </p>
           <p className="font-mono text-xs" style={{ opacity: 0.8 }}>
             {vsMid == null
               ? "vs +8 pp mid"
-              : `${formatPp(vsMid, 1)} vs +${CONVERGE_PP} pp mid`}
+              : `${formatPp(vsMid)} vs +${CONVERGE_PP} pp mid`}
           </p>
         </div>
       </div>
@@ -343,7 +343,7 @@ export default function OaiSoftbankCard({
             Flatten P&amp;L
           </p>
           <p className="font-mono text-lg" style={{ color: tone(pnlPp) }}>
-            {formatPp(pnlPp, 1)}
+            {formatPp(pnlPp)}
           </p>
           <p className="text-xs" style={{ opacity: 0.8 }}>
             Percent-neutral pair vs locked entry

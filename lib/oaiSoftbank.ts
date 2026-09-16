@@ -125,7 +125,7 @@ export function adviceFor(opts: {
   signal: OaiSbSignal;
 }): string {
   const { live, kind, signal } = opts;
-  const liveLabel = live == null ? "the live spread" : `${live >= 0 ? "+" : ""}${live.toFixed(1)} pp`;
+  const liveLabel = live == null ? "the live spread" : `${live >= 0 ? "+" : ""}${live.toFixed(3)} pp`;
 
   if (kind === "short_oai") {
     if (live != null && live <= CONVERGE_PP) {

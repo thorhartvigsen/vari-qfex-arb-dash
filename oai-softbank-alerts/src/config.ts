@@ -64,7 +64,7 @@ export function bookMid(bid: number | null, ask: number | null): number | null {
 
 export function fmtPp(n: number): string {
   const sign = n > 0 ? "+" : "";
-  return `${sign}${n.toFixed(1)} pp`;
+  return `${sign}${n.toFixed(3)} pp`;
 }
 
 export function fmtPx(n: number, decimals: number): string {

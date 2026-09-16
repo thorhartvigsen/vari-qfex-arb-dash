@@ -47,7 +47,7 @@ export function formatSpreadBps(value: number | null | undefined): string {
 
 export function formatPp(
   value: number | null | undefined,
-  decimals = 1,
+  decimals = 3,
 ): string {
   return formatSigned(value, decimals, " pp");
 }
