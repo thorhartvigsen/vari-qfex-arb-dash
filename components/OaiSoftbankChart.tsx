@@ -11,49 +11,74 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { formatChartTime, formatPrice, formatSpreadBps } from "@/lib/format";
-import type { SpreadPoint } from "@/lib/spreadHistory";
+import { formatChartTime, formatPp, formatPrice } from "@/lib/format";
+import {
+  CONVERGE_PP,
+  LOWER_PP,
+  OAI_DECIMALS,
+  SB_DECIMALS,
+  UPPER_PP,
+} from "@/lib/oaiSoftbank";
+import type { OaiSbPoint } from "@/lib/oaiSoftbankHistory";
 import { THEME } from "@/lib/types";
 
-interface SpreadHistoryChartProps {
-  data: SpreadPoint[];
+interface OaiSoftbankChartProps {
+  data: OaiSbPoint[];
   loading?: boolean;
   error?: string | null;
   note?: string | null;
-  decimals?: number;
+  liveSpreadPp?: number | null;
 }
 
-function yDomain(data: SpreadPoint[]): [number, number] {
-  let min = Infinity;
-  let max = -Infinity;
+interface ChartPoint extends OaiSbPoint {
+  live?: boolean;
+}
+
+function yDomain(data: ChartPoint[]): [number, number] {
+  let min = LOWER_PP;
+  let max = UPPER_PP;
   for (const point of data) {
-    if (!Number.isFinite(point.spreadBps)) continue;
-    min = Math.min(min, point.spreadBps);
-    max = Math.max(max, point.spreadBps);
+    if (!Number.isFinite(point.spreadPp)) continue;
+    min = Math.min(min, point.spreadPp);
+    max = Math.max(max, point.spreadPp);
   }
-  if (!Number.isFinite(min) || !Number.isFinite(max)) return [-8, 8];
   if (min === max) {
-    const pad = Math.max(Math.abs(min) * 0.02, 8);
+    const pad = Math.max(Math.abs(min) * 0.08, 4);
     return [min - pad, max + pad];
   }
-  const pad = Math.max((max - min) * 0.08, 8);
+  const pad = Math.max((max - min) * 0.08, 2);
   return [min - pad, max + pad];
 }
 
-export default function SpreadHistoryChart({
+export default function OaiSoftbankChart({
   data,
   loading,
   error,
   note,
-  decimals = 2,
-}: SpreadHistoryChartProps) {
-  const domain = useMemo(() => yDomain(data), [data]);
+  liveSpreadPp,
+}: OaiSoftbankChartProps) {
+  const chartData = useMemo(() => {
+    const rows: ChartPoint[] = [...data];
+    if (liveSpreadPp != null && Number.isFinite(liveSpreadPp)) {
+      const last = rows[rows.length - 1];
+      rows.push({
+        time: Date.now(),
+        oai: last?.oai ?? 0,
+        sb: last?.sb ?? 0,
+        spreadPp: liveSpreadPp,
+        live: true,
+      });
+    }
+    return rows;
+  }, [data, liveSpreadPp]);
+
+  const domain = useMemo(() => yDomain(chartData), [chartData]);
 
   if (loading) {
     return (
       <ChartFrame>
         <p className="text-sm" style={{ color: "var(--arb-text)" }}>
-          Loading 1-minute spread…
+          Loading listing-relative spread…
         </p>
       </ChartFrame>
     );
@@ -69,11 +94,11 @@ export default function SpreadHistoryChart({
     );
   }
 
-  if (data.length === 0) {
+  if (chartData.length === 0) {
     return (
       <ChartFrame>
         <p className="px-6 text-center text-sm" style={{ color: "var(--arb-text)" }}>
-          No overlapping 1-minute candles for this window.
+          No overlapping 5-minute candles since listing.
         </p>
       </ChartFrame>
     );
@@ -89,7 +114,7 @@ export default function SpreadHistoryChart({
         }}
       >
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={data} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
+          <LineChart data={chartData} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke={THEME.grid} />
             <XAxis
               dataKey="time"
@@ -110,7 +135,7 @@ export default function SpreadHistoryChart({
               tick={{ fontSize: 11, fill: THEME.muted }}
               width={56}
               label={{
-                value: "bps",
+                value: "pp",
                 angle: -90,
                 position: "insideLeft",
                 offset: 8,
@@ -126,20 +151,55 @@ export default function SpreadHistoryChart({
               }}
               labelFormatter={(label) => formatChartTime(Number(label))}
               formatter={(value, _name, item) => {
-                const row = item?.payload as SpreadPoint | undefined;
-                const spread =
-                  typeof value === "number" ? value : Number(value);
+                const row = item?.payload as ChartPoint | undefined;
+                const spread = typeof value === "number" ? value : Number(value);
                 const extra =
-                  row != null
-                    ? `  ·  QFEX ${formatPrice(row.qfex, decimals)}  ·  Entropy ${formatPrice(row.entropy, decimals)}`
-                    : "";
-                return [`${formatSpreadBps(spread)}${extra}`, "Spread"];
+                  row != null && !row.live
+                    ? `  ·  OAI ${formatPrice(row.oai, OAI_DECIMALS)}  ·  SB ${formatPrice(row.sb, SB_DECIMALS)}`
+                    : row?.live
+                      ? "  ·  live mid"
+                      : "";
+                return [`${formatPp(spread, 1)}${extra}`, "Spread"];
               }}
             />
-            <ReferenceLine y={0} stroke={THEME.muted} strokeDasharray="4 4" strokeOpacity={0.45} />
+            <ReferenceLine
+              y={CONVERGE_PP}
+              stroke={THEME.light}
+              strokeWidth={1.25}
+              label={{
+                value: `+${CONVERGE_PP} mid`,
+                fill: THEME.muted,
+                fontSize: 11,
+                position: "insideTopRight",
+              }}
+            />
+            <ReferenceLine
+              y={UPPER_PP}
+              stroke={THEME.qfex}
+              strokeDasharray="4 4"
+              strokeOpacity={0.85}
+              label={{
+                value: `+${UPPER_PP} short OAI`,
+                fill: THEME.muted,
+                fontSize: 11,
+                position: "insideTopRight",
+              }}
+            />
+            <ReferenceLine
+              y={LOWER_PP}
+              stroke={THEME.variational}
+              strokeDasharray="4 4"
+              strokeOpacity={0.85}
+              label={{
+                value: `${LOWER_PP} long OAI`,
+                fill: THEME.muted,
+                fontSize: 11,
+                position: "insideBottomRight",
+              }}
+            />
             <Line
               type="monotone"
-              dataKey="spreadBps"
+              dataKey="spreadPp"
               stroke={THEME.light}
               strokeWidth={1.5}
               dot={false}
@@ -150,7 +210,8 @@ export default function SpreadHistoryChart({
         </ResponsiveContainer>
       </div>
       <p className="text-xs" style={{ color: "var(--arb-text)", opacity: 0.7 }}>
-        1-minute closes · bps = 10,000 × (Entropy − QFEX) / QFEX
+        5-minute closes · pp = OAI % since listing − SoftBank % since listing · mid +
+        {CONVERGE_PP} · bands {LOWER_PP} / +{UPPER_PP}
         {note ? `  ·  ${note}` : ""}
       </p>
     </div>

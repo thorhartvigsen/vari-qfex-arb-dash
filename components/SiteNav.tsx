@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 const LINKS = [
   { href: "/", label: "Swaps" },
   { href: "/qfex/entropy", label: "QFEX / Entropy" },
+  { href: "/oai-softbank", label: "OAI / SoftBank" },
 ] as const;
 
 export default function SiteNav() {

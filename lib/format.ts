@@ -45,6 +45,13 @@ export function formatSpreadBps(value: number | null | undefined): string {
   return formatSigned(value, 2, " bps");
 }
 
+export function formatPp(
+  value: number | null | undefined,
+  decimals = 1,
+): string {
+  return formatSigned(value, decimals, " pp");
+}
+
 export function formatChartTime(ts: number): string {
   return new Date(ts).toLocaleString(undefined, {
     month: "short",
