@@ -50,6 +50,7 @@ const health: HealthState = {
 
 const armed = freshArmed();
 let prevSpread: number | null = null;
+let lastSentId: AlertLevel["id"] | null = null;
 let oaiBase = 0;
 let sbBase = 0;
 
@@ -80,8 +81,13 @@ async function tick(): Promise<void> {
   prevSpread = spread;
 
   for (const level of hits) {
+    if (level.id === "mid" && lastSentId === "mid") {
+      console.log(`[alert] skip consecutive converge @ ${fmtPp(spread)}`);
+      continue;
+    }
     const text = alertBody(level, spread, oai, sb);
     await telegramSend(telegramChatId(), text);
+    lastSentId = level.id;
     health.lastAlert = `${level.title} @ ${fmtPp(spread)}`;
     health.alerts += 1;
     console.log(`[alert] ${health.lastAlert}  oai=${oai} sb=${sb}`);

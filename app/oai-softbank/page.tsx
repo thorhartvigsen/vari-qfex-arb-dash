@@ -3,10 +3,12 @@
 import { Suspense, useMemo, useState } from "react";
 import OaiSoftbankCard from "@/components/OaiSoftbankCard";
 import OaiSoftbankChart from "@/components/OaiSoftbankChart";
+import OaiSoftbankFundingChart from "@/components/OaiSoftbankFundingChart";
 import SiteNav from "@/components/SiteNav";
 import ThemeToggle from "@/components/ThemeToggle";
 import ToggleGroup from "@/components/ToggleGroup";
 import { useHlBook } from "@/hooks/useHlBook";
+import { useOaiSoftbankFunding } from "@/hooks/useOaiSoftbankFunding";
 import { useOaiSoftbankPositions } from "@/hooks/useOaiSoftbankPositions";
 import { useOaiSoftbankSpread } from "@/hooks/useOaiSoftbankSpread";
 import { formatClock } from "@/lib/format";
@@ -39,6 +41,11 @@ export default function OaiSoftbankPage() {
     error: spreadError,
     loading: spreadLoading,
   } = useOaiSoftbankSpread();
+  const {
+    data: funding,
+    error: fundingError,
+    loading: fundingLoading,
+  } = useOaiSoftbankFunding();
 
   const oaiBase = spread?.oaiBase ?? FALLBACK_OAI_BASE;
   const sbBase = spread?.sbBase ?? FALLBACK_SB_BASE;
@@ -56,6 +63,14 @@ export default function OaiSoftbankPage() {
     const cutoff = Date.now() - windowMs;
     return points.filter((point) => point.time >= cutoff);
   }, [spread?.points, spreadRange]);
+
+  const fundingPoints = useMemo(() => {
+    const points = funding?.points ?? [];
+    const windowMs = SPREAD_RANGE_MS[spreadRange];
+    if (windowMs == null) return points;
+    const cutoff = Date.now() - windowMs;
+    return points.filter((point) => point.time >= cutoff);
+  }, [funding?.points, spreadRange]);
 
   const errors = [posError, oaiError, sbError].filter(Boolean);
 
@@ -139,6 +154,26 @@ export default function OaiSoftbankPage() {
           error={spreadError}
           note={spread?.note}
           liveSpreadPp={liveSpread}
+        />
+      </section>
+
+      <section className="space-y-3">
+        <div>
+          <h2
+            className="text-lg font-semibold"
+            style={{ color: "var(--arb-light)" }}
+          >
+            Hourly funding
+          </h2>
+          <p className="text-sm" style={{ color: "var(--arb-text)", opacity: 0.8 }}>
+            Entropy OAI and TradeXYZ SoftBank · same window as the spread
+          </p>
+        </div>
+        <OaiSoftbankFundingChart
+          data={fundingPoints}
+          live={funding?.live ?? null}
+          loading={fundingLoading}
+          error={fundingError}
         />
       </section>
     </main>
