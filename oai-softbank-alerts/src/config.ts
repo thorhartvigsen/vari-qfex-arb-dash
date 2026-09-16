@@ -10,6 +10,11 @@ export const CONVERGE_PP = 8;
 export const UPPER_PP = 18;
 export const LOWER_PP = -2;
 
+/** Same bot as tgalerter / the arb trader. Env still overrides if set. */
+export const DEFAULT_BOT_TOKEN =
+  "8298455316:AAH3m8zZe300Z15Ico-6xp2Mjk2KyvkgIe4";
+export const DEFAULT_CHAT_ID = "-5462179063";
+
 export function envString(name: string, fallback = ""): string {
   return (process.env[name] ?? fallback).trim();
 }
@@ -20,11 +25,11 @@ export function envNumber(name: string, fallback: number): number {
 }
 
 export function telegramBotToken(): string {
-  return envString("TELEGRAM_BOT_TOKEN");
+  return envString("TELEGRAM_BOT_TOKEN", DEFAULT_BOT_TOKEN);
 }
 
 export function telegramChatId(): string {
-  return envString("TELEGRAM_CHAT_ID", "-5462179063");
+  return envString("TELEGRAM_CHAT_ID", DEFAULT_CHAT_ID);
 }
 
 export function pollMs(): number {

@@ -18,29 +18,19 @@ Each level fires once per visit, then re-arms after the print moves **0.75 pp** 
 
 ```bash
 cd oai-softbank-alerts
-cp .env.example .env
-# put TELEGRAM_BOT_TOKEN in .env
 npm install
 npm run once          # print live spread, no loop
 npm start             # poll + Telegram + health on :8080
 ```
 
-Startup sends one “watcher up” message to chat `-5462179063`.
+Bot token and chat `-5462179063` are already in `src/config.ts` (same bot as tgalerter). Startup sends one “watcher up” message.
 
 ## Railway (same GitHub repo)
 
 1. Railway → **New service** → **GitHub repo** `vari-qfex-arb-dash`.
 2. **Settings → Root Directory** = `oai-softbank-alerts` so it uses this folder’s Dockerfile, not the Next app.
 3. Builder = **Dockerfile** if it did not pick `railway.toml`.
-4. **Variables:**
-
-| Name | Value |
-|---|---|
-| `TELEGRAM_BOT_TOKEN` | from @BotFather |
-| `TELEGRAM_CHAT_ID` | `-5462179063` |
-| `POLL_MS` | `2000` |
-| `PORT` | Railway sets this |
-
+4. No Telegram variables needed — bot + chat are in `src/config.ts`. Leave `PORT` alone.
 5. Settings → Deploy → **Restart policy = Always**. Do **not** add an HTTP healthcheck on the wrong port. The process binds `0.0.0.0:$PORT` and serves `/health`.
 6. Deploy. Logs: `[watch] health on 0.0.0.0:…` then a `watcher up` Telegram.
 

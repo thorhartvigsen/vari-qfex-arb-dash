@@ -12,7 +12,6 @@ import {
   hysteresisPp,
   listingSpreadPp,
   pollMs,
-  telegramBotToken,
   telegramChatId,
 } from "./config.ts";
 import { fetchListingBases, fetchLiveMids } from "./hl.ts";
@@ -123,10 +122,6 @@ async function main(): Promise<void> {
   if (once) {
     await tick();
     return;
-  }
-
-  if (!telegramBotToken()) {
-    throw new Error("Missing TELEGRAM_BOT_TOKEN");
   }
 
   startHealthServer();
