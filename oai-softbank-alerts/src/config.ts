@@ -44,6 +44,13 @@ export function hysteresisPp(): number {
   return Number.isFinite(raw) && raw >= 0 ? raw : 0.75;
 }
 
+export function pnlPingUrl(): string {
+  return envString(
+    "PNL_PING_URL",
+    "https://vari-qfex-arb-dash.vercel.app/api/oai-softbank/pnl",
+  );
+}
+
 export function healthPort(): number {
   return envNumber("PORT", 8080);
 }

@@ -85,3 +85,18 @@ export function parsePrice(raw: string): number | null {
   const value = Number(cleaned);
   return Number.isFinite(value) && value > 0 ? value : null;
 }
+
+export function formatUsd(
+  value: number | null | undefined,
+  decimals = 0,
+): string {
+  if (value === null || value === undefined || !Number.isFinite(value)) {
+    return "—";
+  }
+  return value.toLocaleString(undefined, {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  });
+}

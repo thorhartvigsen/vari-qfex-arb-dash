@@ -5,12 +5,14 @@ import OaiSoftbankCard from "@/components/OaiSoftbankCard";
 import OaiSoftbankChart from "@/components/OaiSoftbankChart";
 import OaiSoftbankFillsLog from "@/components/OaiSoftbankFillsLog";
 import OaiSoftbankFundingChart from "@/components/OaiSoftbankFundingChart";
+import OaiSoftbankPnlChart from "@/components/OaiSoftbankPnlChart";
 import SiteNav from "@/components/SiteNav";
 import ThemeToggle from "@/components/ThemeToggle";
 import ToggleGroup from "@/components/ToggleGroup";
 import { useHlBook } from "@/hooks/useHlBook";
 import { useOaiSoftbankFills } from "@/hooks/useOaiSoftbankFills";
 import { useOaiSoftbankFunding } from "@/hooks/useOaiSoftbankFunding";
+import { useOaiSoftbankPnl } from "@/hooks/useOaiSoftbankPnl";
 import { useOaiSoftbankPositions } from "@/hooks/useOaiSoftbankPositions";
 import { useOaiSoftbankSpread } from "@/hooks/useOaiSoftbankSpread";
 import { useQfexBooks } from "@/hooks/useQfexBooks";
@@ -58,6 +60,11 @@ export default function OaiSoftbankPage() {
     error: fundingError,
     loading: fundingLoading,
   } = useOaiSoftbankFunding();
+  const {
+    data: pnl,
+    error: pnlError,
+    loading: pnlLoading,
+  } = useOaiSoftbankPnl();
 
   const oaiBase = spread?.oaiBase ?? FALLBACK_OAI_BASE;
   const sbBase = spread?.sbBase ?? FALLBACK_SB_BASE;
@@ -84,6 +91,14 @@ export default function OaiSoftbankPage() {
     const cutoff = Date.now() - windowMs;
     return points.filter((point) => point.time >= cutoff);
   }, [funding?.points, spreadRange]);
+
+  const pnlPoints = useMemo(() => {
+    const points = pnl?.points ?? [];
+    const windowMs = SPREAD_RANGE_MS[spreadRange];
+    if (windowMs == null) return points;
+    const cutoff = Date.now() - windowMs;
+    return points.filter((point) => point.time >= cutoff);
+  }, [pnl?.points, spreadRange]);
 
   const errors = [posError, oaiError, sbError, jpyError].filter(Boolean);
 
@@ -208,6 +223,26 @@ export default function OaiSoftbankPage() {
         <OaiSoftbankFillsLog
           executions={fills?.executions ?? []}
           error={fillsError}
+        />
+      </section>
+
+      <section className="space-y-3">
+        <div>
+          <h2
+            className="text-lg font-semibold"
+            style={{ color: "var(--arb-light)" }}
+          >
+            Collateral P&amp;L
+          </h2>
+          <p className="text-sm" style={{ color: "var(--arb-text)", opacity: 0.8 }}>
+            QFEX account equity + Hyperliquid USDC · 30-minute snapshots · same window as the spread
+          </p>
+        </div>
+        <OaiSoftbankPnlChart
+          data={pnlPoints}
+          live={pnl?.live ?? null}
+          loading={pnlLoading}
+          error={pnlError}
         />
       </section>
     </main>

@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/oai-softbank/pnl",
+      "schedule": "*/30 * * * *"
+    }
+  ]
+}

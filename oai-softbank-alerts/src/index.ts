@@ -11,6 +11,7 @@ import {
   healthPort,
   hysteresisPp,
   listingSpreadPp,
+  pnlPingUrl,
   pollMs,
   telegramChatId,
 } from "./config.ts";
@@ -19,6 +20,28 @@ import { crossedLevels, freshArmed, type AlertLevel } from "./levels.ts";
 import { esc, telegramSend } from "./telegram.ts";
 
 const once = process.argv.includes("--once");
+const SNAPSHOT_MS = 30 * 60 * 1000;
+let lastPnlPing = 0;
+
+async function pingPnlSnapshot(): Promise<void> {
+  const url = pnlPingUrl();
+  if (!url) return;
+  const now = Date.now();
+  if (now - lastPnlPing < SNAPSHOT_MS) return;
+  lastPnlPing = now;
+  try {
+    const response = await fetch(url, {
+      signal: AbortSignal.timeout(20_000),
+    });
+    if (!response.ok) {
+      console.warn(`[pnl] ping ${response.status}`);
+      return;
+    }
+    console.log("[pnl] snapshot pinged");
+  } catch (err) {
+    console.warn("[pnl] ping failed", err instanceof Error ? err.message : err);
+  }
+}
 
 interface HealthState {
   startedAt: string;
@@ -114,6 +137,8 @@ async function tick(): Promise<void> {
       `[watch] ${fmtPp(spread)}  oai=${fmtPx(oai, 2)}  sb=¥${fmtPx(sbJpy, 1)}  $${fmtPx(sbUsd, 3)}  usdJpy=${fmtPx(usdJpy, 2)}  alerts=${health.alerts}`,
     );
   }
+
+  if (!once) await pingPnlSnapshot();
 }
 
 function startHealthServer(): void {
