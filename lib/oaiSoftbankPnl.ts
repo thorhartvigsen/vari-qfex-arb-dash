@@ -4,6 +4,7 @@ import { pnlStats, type OaiSbPnlPayload, type PnlPoint } from "@/lib/pnlTypes";
 import {
   SNAPSHOT_MS,
   appendPnlPoint,
+  pnlPersistMode,
   readPnlStore,
 } from "@/lib/pnlStore";
 import { qfexAuthedGet } from "@/lib/qfexAuth";
@@ -103,7 +104,7 @@ export async function fetchOaiSoftbankPnl(opts?: {
   const existing = await readPnlStore();
   const last = existing.points[existing.points.length - 1];
   const stale = !last || live.time - last.time >= SNAPSHOT_MS;
-  const shouldWrite = opts?.snapshot !== false && stale;
+  const shouldWrite = opts?.snapshot === true && stale;
 
   let store = existing;
   let stored = false;
@@ -126,6 +127,7 @@ export async function fetchOaiSoftbankPnl(opts?: {
     live,
     stats: pnlStats(points),
     stored,
+    persist: pnlPersistMode(),
     fetchedAt: Date.now(),
   };
 }

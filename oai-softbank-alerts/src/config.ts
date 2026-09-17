@@ -60,7 +60,7 @@ export function convergeCooldownMs(): number {
 export function pnlPingUrl(): string {
   return envString(
     "PNL_PING_URL",
-    "https://vari-qfex-arb-dash.vercel.app/api/oai-softbank/pnl",
+    "https://vari-qfex-arb-dash.vercel.app/api/oai-softbank/pnl?snapshot=1",
   );
 }
 

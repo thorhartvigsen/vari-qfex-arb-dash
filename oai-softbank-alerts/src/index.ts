@@ -41,7 +41,9 @@ async function pingPnlSnapshot(): Promise<void> {
   if (now - lastPnlPing < SNAPSHOT_MS) return;
   lastPnlPing = now;
   try {
-    const response = await fetch(url, {
+    const target = new URL(url);
+    target.searchParams.set("snapshot", "1");
+    const response = await fetch(target, {
       signal: AbortSignal.timeout(20_000),
     });
     if (!response.ok) {

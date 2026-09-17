@@ -20,6 +20,7 @@ interface OaiSoftbankPnlChartProps {
   live?: PnlPoint | null;
   loading?: boolean;
   error?: string | null;
+  persist?: "blob" | "local" | "ephemeral" | null;
 }
 
 function formatPnlUsd(value: number): string {
@@ -91,6 +92,7 @@ export default function OaiSoftbankPnlChart({
   live,
   loading,
   error,
+  persist,
 }: OaiSoftbankPnlChartProps) {
   const chartData = useMemo(() => {
     const rows = [...data];
@@ -224,6 +226,11 @@ export default function OaiSoftbankPnlChart({
         QFEX equity + Hyperliquid USDC (incl. Entropy margin) · snapshot every 30 min ·
         P&L vs {START_COLLATERAL.toLocaleString()} start · Sharpe annualized from
         30-minute returns, rf = 0
+        {persist === "ephemeral"
+          ? "  ·  history is not persisting (needs Vercel Blob)"
+          : persist === "blob"
+            ? `  ·  ${chartData.length} stored prints`
+            : ""}
       </p>
     </div>
   );

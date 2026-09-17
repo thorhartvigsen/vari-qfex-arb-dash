@@ -1,8 +1,8 @@
 import "server-only";
 import { promises as fs } from "fs";
 import path from "path";
-import { get, put } from "@vercel/blob";
-import type { PnlPoint } from "@/lib/pnlTypes";
+import { get, head, list, put } from "@vercel/blob";
+import type { PnlPersist, PnlPoint } from "@/lib/pnlTypes";
 
 export type { PnlPoint };
 
@@ -15,6 +15,8 @@ export interface PnlStore {
   updatedAt: string;
   points: PnlPoint[];
 }
+
+let memoryStore: PnlStore | null = null;
 
 function isServerless(): boolean {
   return Boolean(
@@ -30,6 +32,12 @@ function blobEnabled(): boolean {
   );
 }
 
+export function pnlPersistMode(): PnlPersist {
+  if (blobEnabled()) return "blob";
+  if (isServerless()) return "ephemeral";
+  return "local";
+}
+
 function localPath(): string {
   if (isServerless()) {
     return path.join("/tmp", "vari-qfex-arb-dash", "oai-softbank-pnl.json");
@@ -41,6 +49,41 @@ function emptyStore(): PnlStore {
   return { updatedAt: new Date(0).toISOString(), points: [] };
 }
 
+function parseStore(raw: string): PnlStore {
+  if (!raw.trim()) return emptyStore();
+  const parsed = JSON.parse(raw) as PnlStore;
+  if (!parsed || !Array.isArray(parsed.points)) {
+    throw new Error("pnl store missing points");
+  }
+  return parsed;
+}
+
+function mergePoints(...lists: PnlPoint[][]): PnlPoint[] {
+  const byMinute = new Map<number, PnlPoint>();
+  for (const list of lists) {
+    for (const point of list) {
+      if (!Number.isFinite(point.time) || !(point.total > 0)) continue;
+      const key = Math.round(point.time / 60_000);
+      const prev = byMinute.get(key);
+      if (!prev || point.time >= prev.time) byMinute.set(key, point);
+    }
+  }
+  return [...byMinute.values()]
+    .sort((a, b) => a.time - b.time)
+    .slice(-MAX_PNL_POINTS);
+}
+
+function mergeStores(...stores: Array<PnlStore | null | undefined>): PnlStore {
+  const points = mergePoints(...stores.map((store) => store?.points ?? []));
+  const updatedAt =
+    stores
+      .map((store) => store?.updatedAt)
+      .filter((value): value is string => Boolean(value))
+      .sort()
+      .at(-1) ?? new Date().toISOString();
+  return { updatedAt, points };
+}
+
 async function streamToText(stream: ReadableStream<Uint8Array>): Promise<string> {
   return new Response(stream).text();
 }
@@ -48,9 +91,7 @@ async function streamToText(stream: ReadableStream<Uint8Array>): Promise<string>
 async function readLocal(): Promise<PnlStore> {
   try {
     const raw = await fs.readFile(localPath(), "utf8");
-    const parsed = JSON.parse(raw) as PnlStore;
-    if (!parsed || !Array.isArray(parsed.points)) return emptyStore();
-    return parsed;
+    return parseStore(raw);
   } catch {
     return emptyStore();
   }
@@ -62,31 +103,54 @@ async function writeLocal(store: PnlStore): Promise<void> {
   await fs.writeFile(filePath, JSON.stringify(store), "utf8");
 }
 
+async function readBlobBody(pathnameOrUrl: string): Promise<PnlStore | null> {
+  const result = await get(pathnameOrUrl, {
+    access: "private",
+    useCache: false,
+  });
+  if (!result || result.statusCode !== 200 || !result.stream) return null;
+  return parseStore(await streamToText(result.stream));
+}
+
 async function readBlob(): Promise<PnlStore> {
-  let result: Awaited<ReturnType<typeof get>>;
   try {
-    result = await get(PNL_BLOB_PATH, {
-      access: "private",
-      useCache: false,
-    });
+    const direct = await readBlobBody(PNL_BLOB_PATH);
+    if (direct) return direct;
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    if (/not\s*found|404|does not exist/i.test(message)) return emptyStore();
-    throw err;
+    if (!/not\s*found|404|does not exist/i.test(message)) {
+      console.warn("[pnl] blob get failed", message);
+    }
   }
-  if (!result) return emptyStore();
-  const status = Number(result.statusCode);
-  if (status === 404) return emptyStore();
-  if (status !== 200 || !result.stream) {
-    throw new Error(`pnl blob get failed status=${status || "unknown"}`);
+
+  try {
+    const meta = await head(PNL_BLOB_PATH);
+    const fromUrl = await readBlobBody(meta.url);
+    if (fromUrl) return fromUrl;
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    if (!/not\s*found|404|does not exist/i.test(message)) {
+      console.warn("[pnl] blob head failed", message);
+    }
   }
-  const raw = await streamToText(result.stream);
-  if (!raw.trim()) return emptyStore();
-  const parsed = JSON.parse(raw) as PnlStore;
-  if (!parsed || !Array.isArray(parsed.points)) {
-    throw new Error("pnl blob missing points");
+
+  try {
+    const listed = await list({ prefix: PNL_BLOB_PATH, limit: 10 });
+    const match =
+      listed.blobs.find((row) => row.pathname === PNL_BLOB_PATH) ??
+      listed.blobs[0];
+    if (match) {
+      const fromList = await readBlobBody(match.url);
+      if (fromList) return fromList;
+    }
+  } catch (err) {
+    console.warn(
+      "[pnl] blob list failed",
+      err instanceof Error ? err.message : err,
+    );
   }
-  return parsed;
+
+  return emptyStore();
 }
 
 async function writeBlob(store: PnlStore): Promise<void> {
@@ -99,19 +163,23 @@ async function writeBlob(store: PnlStore): Promise<void> {
 }
 
 export async function readPnlStore(): Promise<PnlStore> {
-  if (blobEnabled()) return readBlob();
-  return readLocal();
+  const persisted = blobEnabled() ? await readBlob() : await readLocal();
+  const merged = mergeStores(memoryStore, persisted);
+  memoryStore = merged;
+  return merged;
 }
 
 export async function writePnlStore(store: PnlStore): Promise<void> {
+  const merged = mergeStores(memoryStore, store);
+  memoryStore = merged;
   if (blobEnabled()) {
-    await writeBlob(store);
+    await writeBlob(merged);
     return;
   }
   if (isServerless()) {
     console.warn("[pnl] no Vercel Blob store — 30m snapshots will not persist");
   }
-  await writeLocal(store);
+  await writeLocal(merged);
 }
 
 export async function appendPnlPoint(point: PnlPoint): Promise<PnlStore> {
@@ -120,13 +188,13 @@ export async function appendPnlPoint(point: PnlPoint): Promise<PnlStore> {
   if (last && Math.abs(point.time - last.time) < SNAPSHOT_DEDUP_MS) {
     return store;
   }
-  const points = [...store.points, point]
-    .sort((a, b) => a.time - b.time)
-    .slice(-MAX_PNL_POINTS);
   const next: PnlStore = {
     updatedAt: new Date().toISOString(),
-    points,
+    points: mergePoints(store.points, [point]),
   };
+  if (next.points.length < store.points.length) {
+    return store;
+  }
   await writePnlStore(next);
   return next;
 }

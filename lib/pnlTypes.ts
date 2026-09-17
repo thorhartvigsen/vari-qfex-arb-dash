@@ -18,8 +18,11 @@ export interface OaiSbPnlPayload {
   live: PnlPoint;
   stats: PnlStats;
   stored: boolean;
+  persist: PnlPersist;
   fetchedAt: number;
 }
+
+export type PnlPersist = "blob" | "local" | "ephemeral";
 
 const PERIODS_PER_YEAR = 365.25 * 48; // 30-minute bars
 

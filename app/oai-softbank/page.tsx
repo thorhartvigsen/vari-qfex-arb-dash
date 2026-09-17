@@ -243,6 +243,7 @@ export default function OaiSoftbankPage() {
           live={pnl?.live ?? null}
           loading={pnlLoading}
           error={pnlError}
+          persist={pnl?.persist ?? null}
         />
       </section>
     </main>
