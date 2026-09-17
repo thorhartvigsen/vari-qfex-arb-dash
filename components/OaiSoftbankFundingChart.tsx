@@ -176,7 +176,7 @@ export default function OaiSoftbankFundingChart({
         </ResponsiveContainer>
       </div>
       <p className="text-xs" style={{ color: "var(--arb-text)", opacity: 0.7 }}>
-        Hourly Hyperliquid settlements · ann % = hourly rate × 24 × 365 · live is the current hour
+        Hourly settlements · ann % = hourly rate × 24 × 365 · live is the current hour
       </p>
     </div>
   );
