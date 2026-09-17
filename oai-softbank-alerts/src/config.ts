@@ -17,6 +17,8 @@ export const LOWER_PP = -2;
 export const DEFAULT_BOT_TOKEN =
   "8298455316:AAH3m8zZe300Z15Ico-6xp2Mjk2KyvkgIe4";
 export const DEFAULT_CHAT_ID = "-5462179063";
+/** Risk chat — liquidation distance alerts. */
+export const DEFAULT_LIQ_CHAT_ID = "-5325885280";
 
 export function envString(name: string, fallback = ""): string {
   return (process.env[name] ?? fallback).trim();
@@ -35,6 +37,10 @@ export function telegramChatId(): string {
   return envString("TELEGRAM_CHAT_ID", DEFAULT_CHAT_ID);
 }
 
+export function telegramLiqChatId(): string {
+  return envString("TELEGRAM_CHAT_LIQ", DEFAULT_LIQ_CHAT_ID);
+}
+
 export function pollMs(): number {
   return Math.max(500, envNumber("POLL_MS", 2_000));
 }
@@ -49,6 +55,22 @@ export function pnlPingUrl(): string {
     "PNL_PING_URL",
     "https://vari-qfex-arb-dash.vercel.app/api/oai-softbank/pnl",
   );
+}
+
+export function liqPingUrl(): string {
+  return envString(
+    "LIQ_PING_URL",
+    "https://vari-qfex-arb-dash.vercel.app/api/oai-softbank/liq",
+  );
+}
+
+export function liqPollMs(): number {
+  return Math.max(2_000, envNumber("LIQ_POLL_MS", 10_000));
+}
+
+export function liqHysteresisPct(): number {
+  const raw = Number(process.env.LIQ_HYSTERESIS_PCT);
+  return Number.isFinite(raw) && raw >= 0 ? raw : 2;
 }
 
 export function healthPort(): number {
