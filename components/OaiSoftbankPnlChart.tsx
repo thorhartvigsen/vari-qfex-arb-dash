@@ -11,7 +11,7 @@ import {
   YAxis,
 } from "recharts";
 import { formatChartTime, formatSigned, formatUsd } from "@/lib/format";
-import { pnlStats } from "@/lib/pnlTypes";
+import { START_COLLATERAL, pnlStats } from "@/lib/pnlTypes";
 import type { PnlPoint } from "@/lib/pnlTypes";
 import { THEME } from "@/lib/types";
 
@@ -20,6 +20,13 @@ interface OaiSoftbankPnlChartProps {
   live?: PnlPoint | null;
   loading?: boolean;
   error?: string | null;
+}
+
+function formatPnlUsd(value: number): string {
+  const abs = formatUsd(Math.abs(value), 0);
+  if (value > 0) return `+${abs}`;
+  if (value < 0) return `-${abs}`;
+  return abs;
 }
 
 function yDomain(data: PnlPoint[]): [number, number] {
@@ -126,13 +133,13 @@ export default function OaiSoftbankPnlChart({
         <Stat label="QFEX" value={formatUsd(live?.qfex ?? null, 0)} />
         <Stat label="Hyperliquid" value={formatUsd(live?.hl ?? null, 0)} />
         <Stat
-          label="Max drawdown"
+          label="P&L"
           value={
-            stats?.maxDrawdownPct == null
+            stats?.pnlUsd == null
               ? "—"
-              : `${formatSigned(-stats.maxDrawdownPct, 2, "%")}  ·  ${formatUsd(-(stats.maxDrawdownUsd ?? 0), 0)}`
+              : `${formatPnlUsd(stats.pnlUsd)}  ·  ${formatSigned(stats.pnlPct, 2, "%")}`
           }
-          toneValue={stats?.maxDrawdownPct ? -stats.maxDrawdownPct : 0}
+          toneValue={stats?.pnlUsd}
         />
         <Stat
           label="Sharpe"
@@ -215,10 +222,8 @@ export default function OaiSoftbankPnlChart({
       )}
       <p className="text-xs" style={{ color: "var(--arb-text)", opacity: 0.7 }}>
         QFEX equity + Hyperliquid USDC (incl. Entropy margin) · snapshot every 30 min ·
-        Sharpe annualized from 30-minute returns, rf = 0
-        {stats?.pnlUsd != null
-          ? `  ·  since first print ${formatSigned(stats.pnlUsd, 0)} (${formatSigned(stats.pnlPct, 2, "%")})`
-          : ""}
+        P&L vs {START_COLLATERAL.toLocaleString()} start · Sharpe annualized from
+        30-minute returns, rf = 0
       </p>
     </div>
   );

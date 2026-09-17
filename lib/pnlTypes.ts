@@ -5,9 +5,9 @@ export interface PnlPoint {
   total: number;
 }
 
+export const START_COLLATERAL = 48_000;
+
 export interface PnlStats {
-  maxDrawdownPct: number | null;
-  maxDrawdownUsd: number | null;
   sharpe: number | null;
   pnlUsd: number | null;
   pnlPct: number | null;
@@ -23,28 +23,14 @@ export interface OaiSbPnlPayload {
 
 const PERIODS_PER_YEAR = 365.25 * 48; // 30-minute bars
 
-export function pnlStats(points: PnlPoint[]): PnlStats {
+export function pnlStats(
+  points: PnlPoint[],
+  start = START_COLLATERAL,
+): PnlStats {
   const totals = points.map((p) => p.total).filter((n) => n > 0);
-  if (totals.length === 0) {
-    return {
-      maxDrawdownPct: null,
-      maxDrawdownUsd: null,
-      sharpe: null,
-      pnlUsd: null,
-      pnlPct: null,
-    };
-  }
-
-  let peak = totals[0];
-  let maxDdUsd = 0;
-  let maxDdPct = 0;
-  for (const value of totals) {
-    if (value > peak) peak = value;
-    const ddUsd = peak - value;
-    const ddPct = peak > 0 ? ddUsd / peak : 0;
-    if (ddUsd > maxDdUsd) maxDdUsd = ddUsd;
-    if (ddPct > maxDdPct) maxDdPct = ddPct;
-  }
+  const last = totals[totals.length - 1];
+  const pnlUsd = last == null ? null : last - start;
+  const pnlPct = pnlUsd == null || !(start > 0) ? null : (pnlUsd / start) * 100;
 
   const returns: number[] = [];
   for (let i = 1; i < totals.length; i += 1) {
@@ -61,13 +47,5 @@ export function pnlStats(points: PnlPoint[]): PnlStats {
     sharpe = std > 1e-12 ? (mean / std) * Math.sqrt(PERIODS_PER_YEAR) : null;
   }
 
-  const first = totals[0];
-  const last = totals[totals.length - 1];
-  return {
-    maxDrawdownPct: maxDdPct * 100,
-    maxDrawdownUsd: maxDdUsd,
-    sharpe,
-    pnlUsd: last - first,
-    pnlPct: first > 0 ? ((last - first) / first) * 100 : null,
-  };
+  return { sharpe, pnlUsd, pnlPct };
 }
