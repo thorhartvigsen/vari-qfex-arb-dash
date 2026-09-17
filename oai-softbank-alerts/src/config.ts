@@ -65,7 +65,7 @@ export function liqPingUrl(): string {
 }
 
 export function liqPollMs(): number {
-  return Math.max(2_000, envNumber("LIQ_POLL_MS", 10_000));
+  return Math.max(1_000, envNumber("LIQ_POLL_MS", 5_000));
 }
 
 export function liqHysteresisPct(): number {

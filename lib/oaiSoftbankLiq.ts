@@ -94,6 +94,21 @@ async function qfexMid(symbol: string): Promise<number | null> {
   return bookMid(num(book.bids?.[0]?.[0]), num(book.asks?.[0]?.[0]));
 }
 
+/** QFEX mark/index in quote currency. JPY names PnL in USDC as q × (P_jpy − entry). */
+async function qfexIndex(symbol: string): Promise<number | null> {
+  const response = await fetch(
+    `https://api.qfex.com/md/contracts?symbol=${encodeURIComponent(symbol)}`,
+    { cache: "no-store" },
+  );
+  if (!response.ok) return null;
+  const body = (await response.json()) as {
+    data?: Array<{ ticker_id?: string; index_price?: string; last_price?: string }>;
+  };
+  const row =
+    (body.data ?? []).find((item) => item.ticker_id === symbol) ?? body.data?.[0];
+  return num(row?.index_price) ?? num(row?.last_price);
+}
+
 function qfexEquityUsd(balance: QfexPositionsResponse["balance"]): number | null {
   if (!balance) return null;
   const equity =
@@ -104,25 +119,16 @@ function qfexEquityUsd(balance: QfexPositionsResponse["balance"]): number | null
   return Number.isFinite(equity) ? equity : null;
 }
 
-function isJpySymbol(symbol: string): boolean {
-  return symbol.endsWith("-JPY") || symbol.includes("JPY");
-}
-
-function positionMarkUsd(
-  symbol: string,
-  avgPx: number,
-  usdJpy: number,
-): number | null {
-  if (!(avgPx > 0)) return null;
-  if (isJpySymbol(symbol)) return jpyToUsd(avgPx, usdJpy);
-  return avgPx;
+/** QFEX MM/PnL uses quote units as USDC 1:1, including JPY and KRW names. */
+function qfexQuoteNotional(nativePx: number, size: number): number {
+  return Math.abs(size) * nativePx;
 }
 
 export async function fetchOaiSoftbankLiq(): Promise<OaiSbLiqPayload> {
   const wallet = process.env.HL_WALLET_ADDRESS;
   if (!wallet) throw new Error("Missing HL_WALLET_ADDRESS");
 
-  const [oaiState, qfexPos, oaiMark, fx, sbMarkJpy] = await Promise.all([
+  const [oaiState, qfexPos, oaiMark, fx, sbIndex, sbMid] = await Promise.all([
     postInfo<HlClearinghouse>({
       type: "clearinghouseState",
       user: wallet,
@@ -131,8 +137,15 @@ export async function fetchOaiSoftbankLiq(): Promise<OaiSbLiqPayload> {
     qfexAuthedGet<QfexPositionsResponse>("/user/positions"),
     hlMid(OAI_COIN),
     hlMid(JPY_COIN),
+    qfexIndex(SB_SYMBOL),
     qfexMid(SB_SYMBOL),
   ]);
+  const sbMarkJpy =
+    sbIndex != null && sbIndex > 0
+      ? sbIndex
+      : sbMid != null && sbMid > 0
+        ? sbMid
+        : null;
 
   const oaiRaw =
     (oaiState.assetPositions ?? [])
@@ -183,8 +196,6 @@ export async function fetchOaiSoftbankLiq(): Promise<OaiSbLiqPayload> {
     (qfexPos.positions ?? []).find((p) => p.symbol === SB_SYMBOL) ?? null;
   const sbSize = num(sbRaw?.position) ?? 0;
   const sbSide = sideFromSize(sbSize);
-  const sbMarkUsd =
-    sbMarkJpy != null && fx != null ? jpyToUsd(sbMarkJpy, fx) : null;
   const sbMaint = num(sbRaw?.maintenance_margin);
   let mmOther = 0;
   for (const row of qfexPos.positions ?? []) {
@@ -193,10 +204,8 @@ export async function fetchOaiSoftbankLiq(): Promise<OaiSbLiqPayload> {
     const size = num(row.position) ?? 0;
     const avg = num(row.average_price) ?? 0;
     const maint = num(row.maintenance_margin);
-    if (size === 0 || maint == null || fx == null) continue;
-    const markUsd = positionMarkUsd(symbol, avg, fx);
-    if (markUsd == null) continue;
-    mmOther += maint * Math.abs(size) * markUsd;
+    if (size === 0 || maint == null || !(avg > 0)) continue;
+    mmOther += maint * qfexQuoteNotional(avg, size);
   }
 
   let softbank: LiqLeg | null = null;
@@ -205,35 +214,37 @@ export async function fetchOaiSoftbankLiq(): Promise<OaiSbLiqPayload> {
     sbSide !== "flat" &&
     sbMarkJpy != null &&
     sbMarkJpy > 0 &&
-    sbMarkUsd != null &&
     equity != null &&
-    sbMaint != null &&
-    fx != null &&
-    fx > 0
+    sbMaint != null
   ) {
     const equityForSb = equity - mmOther;
-    const liqUsd = estimateLiqPrice({
+    const liqJpy = estimateLiqPrice({
       size: sbSize,
-      mark: sbMarkUsd,
+      mark: sbMarkJpy,
       equity: equityForSb,
       maintRate: sbMaint,
     });
     const onSide =
-      liqUsd != null &&
-      ((sbSize > 0 && liqUsd < sbMarkUsd) ||
-        (sbSize < 0 && liqUsd > sbMarkUsd));
-    const liqUsdKept = onSide ? liqUsd : null;
-    const liqJpy = liqUsdKept != null ? liqUsdKept * fx : null;
+      liqJpy != null &&
+      ((sbSize > 0 && liqJpy < sbMarkJpy) ||
+        (sbSize < 0 && liqJpy > sbMarkJpy));
+    const liqKept = onSide ? liqJpy : null;
+    const markUsd =
+      fx != null && fx > 0 ? jpyToUsd(sbMarkJpy, fx) : sbMarkJpy;
+    const liqUsd =
+      liqKept != null && fx != null && fx > 0
+        ? jpyToUsd(liqKept, fx)
+        : liqKept;
     softbank = {
       venue: "softbank",
       label: "QFEX SoftBank",
       side: sbSide,
       size: sbSize,
       mark: sbMarkJpy,
-      markUsd: sbMarkUsd,
-      liq: liqJpy,
-      liqUsd: liqUsdKept,
-      distPct: distToLiqPct(sbSize, sbMarkUsd, liqUsdKept),
+      markUsd: markUsd ?? sbMarkJpy,
+      liq: liqKept,
+      liqUsd: liqUsd,
+      distPct: distToLiqPct(sbSize, sbMarkJpy, liqKept),
       quote: "JPY",
     };
   }
