@@ -27,7 +27,9 @@ interface HealthState {
   lastTickAt: string | null;
   lastSpreadPp: number | null;
   lastOai: number | null;
-  lastSb: number | null;
+  lastSbJpy: number | null;
+  lastSbUsd: number | null;
+  lastUsdJpy: number | null;
   lastAlert: string | null;
   lastError: string | null;
   ticks: number;
@@ -41,7 +43,9 @@ const health: HealthState = {
   lastTickAt: null,
   lastSpreadPp: null,
   lastOai: null,
-  lastSb: null,
+  lastSbJpy: null,
+  lastSbUsd: null,
+  lastUsdJpy: null,
   lastAlert: null,
   lastError: null,
   ticks: 0,
@@ -54,26 +58,36 @@ let lastSentId: AlertLevel["id"] | null = null;
 let oaiBase = 0;
 let sbBase = 0;
 
-function alertBody(level: AlertLevel, spread: number, oai: number, sb: number): string {
+function alertBody(
+  level: AlertLevel,
+  spread: number,
+  oai: number,
+  sbJpy: number,
+  sbUsd: number,
+  usdJpy: number,
+): string {
   return [
     `<b>OAI / SoftBank  ${esc(fmtPp(spread))}</b>`,
     `Level: ${esc(level.title)}`,
     `<b>${esc(level.action)}</b>`,
     "",
     `OAI ${esc(fmtPx(oai, 2))}`,
-    `SoftBank ${esc(fmtPx(sb, 3))}`,
+    `SoftBank ¥${esc(fmtPx(sbJpy, 1))}  ($${esc(fmtPx(sbUsd, 3))})`,
+    `USDJPY ${esc(fmtPx(usdJpy, 2))}`,
   ].join("\n");
 }
 
 async function tick(): Promise<void> {
-  const { oai, sb } = await fetchLiveMids();
-  const spread = listingSpreadPp(oai, sb, oaiBase, sbBase);
+  const { oai, sbJpy, usdJpy, sbUsd } = await fetchLiveMids();
+  const spread = listingSpreadPp(oai, sbUsd, oaiBase, sbBase);
   if (spread == null) throw new Error("spread null");
 
   health.lastTickAt = new Date().toISOString();
   health.lastSpreadPp = spread;
   health.lastOai = oai;
-  health.lastSb = sb;
+  health.lastSbJpy = sbJpy;
+  health.lastSbUsd = sbUsd;
+  health.lastUsdJpy = usdJpy;
   health.lastError = null;
   health.ticks += 1;
 
@@ -85,17 +99,19 @@ async function tick(): Promise<void> {
       console.log(`[alert] skip consecutive converge @ ${fmtPp(spread)}`);
       continue;
     }
-    const text = alertBody(level, spread, oai, sb);
+    const text = alertBody(level, spread, oai, sbJpy, sbUsd, usdJpy);
     await telegramSend(telegramChatId(), text);
     lastSentId = level.id;
     health.lastAlert = `${level.title} @ ${fmtPp(spread)}`;
     health.alerts += 1;
-    console.log(`[alert] ${health.lastAlert}  oai=${oai} sb=${sb}`);
+    console.log(
+      `[alert] ${health.lastAlert}  oai=${oai} sbJPY=${sbJpy} usdJpy=${usdJpy}`,
+    );
   }
 
   if (once || health.ticks % 15 === 1) {
     console.log(
-      `[watch] ${fmtPp(spread)}  oai=${fmtPx(oai, 2)}  sb=${fmtPx(sb, 3)}  alerts=${health.alerts}`,
+      `[watch] ${fmtPp(spread)}  oai=${fmtPx(oai, 2)}  sb=¥${fmtPx(sbJpy, 1)}  $${fmtPx(sbUsd, 3)}  usdJpy=${fmtPx(usdJpy, 2)}  alerts=${health.alerts}`,
     );
   }
 }
@@ -123,7 +139,7 @@ async function main(): Promise<void> {
   sbBase = bases.sbBase;
   health.oaiBase = oaiBase;
   health.sbBase = sbBase;
-  console.log(`[watch] listing bases OAI ${oaiBase}  SoftBank ${sbBase}`);
+  console.log(`[watch] listing bases OAI ${oaiBase}  SoftBank USD ${sbBase}`);
 
   if (once) {
     await tick();
@@ -136,6 +152,7 @@ async function main(): Promise<void> {
     telegramChatId(),
     [
       "<b>OAI / SoftBank watcher up</b>",
+      "QFEX SOFTBANK-JPY · USD via xyz:JPY",
       health.lastSpreadPp != null ? `Live ${esc(fmtPp(health.lastSpreadPp))}` : "Live n/a",
       "Alerting +18 / +8 / −2",
     ].join("\n"),

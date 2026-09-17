@@ -62,6 +62,7 @@ export function QuoteColumn({
   decimals,
   accent,
   showAge = false,
+  pricePrefix = "",
 }: {
   title: string;
   subtitle: string;
@@ -69,6 +70,7 @@ export function QuoteColumn({
   decimals: number;
   accent: string;
   showAge?: boolean;
+  pricePrefix?: string;
 }) {
   const bid = book?.bid ?? null;
   const ask = book?.ask ?? null;
@@ -100,6 +102,7 @@ export function QuoteColumn({
             className="font-mono text-sm tabular-nums leading-tight sm:text-base"
             style={{ color: "var(--arb-xyz)" }}
           >
+            {pricePrefix}
             {formatPrice(bid, decimals)}
           </p>
         </div>
@@ -111,12 +114,14 @@ export function QuoteColumn({
             className="font-mono text-sm tabular-nums leading-tight sm:text-base"
             style={{ color: "var(--arb-qfex)" }}
           >
+            {pricePrefix}
             {formatPrice(ask, decimals)}
           </p>
         </div>
       </div>
       <p className="font-mono text-xs" style={{ opacity: 0.8 }}>
-        Mid {formatPrice(mid, decimals)}
+        Mid {pricePrefix}
+        {formatPrice(mid, decimals)}
         {spread !== null ? `  ·  ${spread.toFixed(2)} bps wide` : ""}
       </p>
     </div>

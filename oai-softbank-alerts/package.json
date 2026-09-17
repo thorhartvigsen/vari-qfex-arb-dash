@@ -2,7 +2,7 @@
   "name": "oai-softbank-alerts",
   "version": "0.1.0",
   "private": true,
-  "description": "Telegram alerts when Entropy OAI vs TradeXYZ SoftBank listing-relative spread hits +18 / +8 / -2",
+  "description": "Telegram alerts when Entropy OAI vs QFEX SoftBank (JPY→USD) listing-relative spread hits +18 / +8 / -2",
   "type": "module",
   "scripts": {
     "start": "tsx src/index.ts",

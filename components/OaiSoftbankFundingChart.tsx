@@ -94,7 +94,7 @@ export default function OaiSoftbankFundingChart({
           ann={live?.oai.annPct ?? null}
         />
         <LiveStat
-          label="TradeXYZ SoftBank"
+          label="QFEX SoftBank"
           accent="var(--arb-qfex)"
           ann={live?.sb.annPct ?? null}
         />

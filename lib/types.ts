@@ -1,3 +1,4 @@
+export const QFEX_API = "https://api.qfex.com";
 export const QFEX_MDS = "wss://mds.qfex.com";
 export const VARIATIONAL_STATS_URL =
   "https://omni-client-api.prod.ap-northeast-1.variational.io/metadata/stats";

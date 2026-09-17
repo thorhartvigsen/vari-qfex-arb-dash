@@ -13,15 +13,18 @@ import { useOaiSoftbankFills } from "@/hooks/useOaiSoftbankFills";
 import { useOaiSoftbankFunding } from "@/hooks/useOaiSoftbankFunding";
 import { useOaiSoftbankPositions } from "@/hooks/useOaiSoftbankPositions";
 import { useOaiSoftbankSpread } from "@/hooks/useOaiSoftbankSpread";
+import { useQfexBooks } from "@/hooks/useQfexBooks";
 import { formatClock } from "@/lib/format";
 import {
   FALLBACK_OAI_BASE,
   FALLBACK_SB_BASE,
+  JPY_COIN,
   OAI_COIN,
-  SB_COIN,
+  SB_SYMBOL,
   SPREAD_RANGE_MS,
   SPREAD_RANGES,
   bookMid,
+  jpyToUsd,
   listingSpreadPp,
   type OaiSbRange,
 } from "@/lib/oaiSoftbank";
@@ -38,7 +41,13 @@ export default function OaiSoftbankPage() {
   const { data, error: posError } = useOaiSoftbankPositions();
   const { data: fills, error: fillsError } = useOaiSoftbankFills();
   const { book: oaiBook, connected: oaiConnected, error: oaiError } = useHlBook(OAI_COIN);
-  const { book: sbBook, connected: sbConnected, error: sbError } = useHlBook(SB_COIN);
+  const { book: jpyBook, connected: jpyConnected, error: jpyError } = useHlBook(JPY_COIN);
+  const {
+    books: qfexBooks,
+    connected: sbConnected,
+    error: sbError,
+  } = useQfexBooks([SB_SYMBOL]);
+  const sbBook = qfexBooks[SB_SYMBOL];
   const {
     data: spread,
     error: spreadError,
@@ -52,9 +61,10 @@ export default function OaiSoftbankPage() {
 
   const oaiBase = spread?.oaiBase ?? FALLBACK_OAI_BASE;
   const sbBase = spread?.sbBase ?? FALLBACK_SB_BASE;
+  const usdJpy = bookMid(jpyBook?.bid, jpyBook?.ask);
   const liveSpread = listingSpreadPp(
     bookMid(oaiBook?.bid, oaiBook?.ask),
-    bookMid(sbBook?.bid, sbBook?.ask),
+    jpyToUsd(bookMid(sbBook?.bid, sbBook?.ask), usdJpy),
     oaiBase,
     sbBase,
   );
@@ -75,7 +85,7 @@ export default function OaiSoftbankPage() {
     return points.filter((point) => point.time >= cutoff);
   }, [funding?.points, spreadRange]);
 
-  const errors = [posError, oaiError, sbError].filter(Boolean);
+  const errors = [posError, oaiError, sbError, jpyError].filter(Boolean);
 
   return (
     <main className="mx-auto flex min-h-screen max-w-6xl flex-col gap-8 px-4 py-8 sm:px-6">
@@ -93,7 +103,7 @@ export default function OaiSoftbankPage() {
                 OAI × SoftBank
               </p>
               <p className="text-sm" style={{ color: "var(--arb-text)" }}>
-                Entropy io:OAI vs TradeXYZ xyz:SOFTBANK · +8 pp listing-relative mid
+                Entropy io:OAI vs QFEX SOFTBANK-JPY · USD via xyz:JPY · +8 pp listing-relative mid
               </p>
               <p className="text-xs" style={{ opacity: 0.75 }}>
                 Positions {formatClock(data?.fetchedAt)}
@@ -101,6 +111,8 @@ export default function OaiSoftbankPage() {
                 OAI {oaiConnected ? "live" : "connecting"}
                 {"  ·  "}
                 SoftBank {sbConnected ? "live" : "connecting"}
+                {"  ·  "}
+                USDJPY {jpyConnected ? "live" : "connecting"}
               </p>
             </div>
           </div>
@@ -129,6 +141,7 @@ export default function OaiSoftbankPage() {
         sbLeg={data?.softbank ?? null}
         oaiBase={oaiBase}
         sbBase={sbBase}
+        usdJpy={usdJpy}
       />
 
       <section className="space-y-3">
@@ -141,7 +154,7 @@ export default function OaiSoftbankPage() {
               Listing-relative spread
             </h2>
             <p className="text-sm" style={{ color: "var(--arb-text)", opacity: 0.8 }}>
-              OAI % since 2 Sep 13:00 UTC − SoftBank % · +8 mid, ±10 bands
+              OAI % since 2 Sep 13:00 UTC − SoftBank USD % (JPY ÷ USDJPY) · +8 mid, ±10 bands
             </p>
           </div>
           <ToggleGroup
@@ -169,7 +182,7 @@ export default function OaiSoftbankPage() {
             Hourly funding
           </h2>
           <p className="text-sm" style={{ color: "var(--arb-text)", opacity: 0.8 }}>
-            Entropy OAI and TradeXYZ SoftBank · same window as the spread
+            Entropy OAI and QFEX SoftBank · same window as the spread
           </p>
         </div>
         <OaiSoftbankFundingChart
@@ -189,7 +202,7 @@ export default function OaiSoftbankPage() {
             Execution log
           </h2>
           <p className="text-sm" style={{ color: "var(--arb-text)", opacity: 0.8 }}>
-            Your Hyperliquid fills from 17 Sep 2026 00:00 UTC · clustered within 5 minutes · listing-relative entry spread
+            Entropy fills and QFEX SoftBank trades from 17 Sep 2026 00:00 UTC · clustered within 5 minutes · listing-relative entry spread in USD
           </p>
         </div>
         <OaiSoftbankFillsLog

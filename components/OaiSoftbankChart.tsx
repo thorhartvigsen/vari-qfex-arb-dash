@@ -65,6 +65,8 @@ export default function OaiSoftbankChart({
         time: Date.now(),
         oai: last?.oai ?? 0,
         sb: last?.sb ?? 0,
+        sbUsd: last?.sbUsd ?? 0,
+        usdJpy: last?.usdJpy ?? 0,
         spreadPp: liveSpreadPp,
         live: true,
       });
@@ -155,7 +157,7 @@ export default function OaiSoftbankChart({
                 const spread = typeof value === "number" ? value : Number(value);
                 const extra =
                   row != null && !row.live
-                    ? `  ·  OAI ${formatPrice(row.oai, OAI_DECIMALS)}  ·  SB ${formatPrice(row.sb, SB_DECIMALS)}`
+                    ? `  ·  OAI ${formatPrice(row.oai, OAI_DECIMALS)}  ·  SB ¥${formatPrice(row.sb, SB_DECIMALS)}`
                     : row?.live
                       ? "  ·  live mid"
                       : "";
@@ -210,7 +212,7 @@ export default function OaiSoftbankChart({
         </ResponsiveContainer>
       </div>
       <p className="text-xs" style={{ color: "var(--arb-text)", opacity: 0.7 }}>
-        5-minute closes · pp = OAI % since listing − SoftBank % since listing · mid +
+        5-minute closes · pp = OAI % since listing − SoftBank USD % (JPY ÷ USDJPY) · mid +
         {CONVERGE_PP} · bands {LOWER_PP} / +{UPPER_PP}
         {note ? `  ·  ${note}` : ""}
       </p>

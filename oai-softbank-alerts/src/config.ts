@@ -1,9 +1,12 @@
 export const HL_INFO = "https://api.hyperliquid.xyz/info";
+export const QFEX_API = "https://api.qfex.com";
 export const OAI_COIN = "io:OAI";
-export const SB_COIN = "xyz:SOFTBANK";
+export const SB_SYMBOL = "SOFTBANK-JPY";
+export const JPY_COIN = "xyz:JPY";
 export const LISTING_MS = Date.parse("2026-09-02T13:00:00.000Z");
 
 export const FALLBACK_OAI_BASE = 1151.8;
+/** TradeXYZ SoftBank USD print at listing; QFEX JPY is converted via USDJPY. */
 export const FALLBACK_SB_BASE = 31.235;
 
 export const CONVERGE_PP = 8;
@@ -43,6 +46,11 @@ export function hysteresisPp(): number {
 
 export function healthPort(): number {
   return envNumber("PORT", 8080);
+}
+
+export function jpyToUsd(jpy: number, usdJpy: number): number | null {
+  if (!(jpy > 0 && usdJpy > 0)) return null;
+  return jpy / usdJpy;
 }
 
 export function listingSpreadPp(

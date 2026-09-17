@@ -6,8 +6,9 @@ export { HL_INFO };
 
 export const OAI_COIN = "io:OAI";
 export const OAI_DEX = "io";
-export const SB_COIN = "xyz:SOFTBANK";
-export const SB_DEX = "xyz";
+export const SB_SYMBOL = "SOFTBANK-JPY";
+export const JPY_COIN = "xyz:JPY";
+export const JPY_DEX = "xyz";
 
 export const LISTING_MS = Date.parse("2026-09-02T13:00:00.000Z");
 /** Listing-relative converge. +8 pp, not 8 bps. */
@@ -17,12 +18,15 @@ export const UPPER_PP = CONVERGE_PP + BAND_PP; // +18
 export const LOWER_PP = CONVERGE_PP - BAND_PP; // -2
 
 export const OAI_DECIMALS = 2;
-export const SB_DECIMALS = 3;
+export const SB_DECIMALS = 1;
+export const JPY_DECIMALS = 2;
 export const SIZE_USD = 1_000;
 
 /** First overlapping 5m print from the listing window; used until history loads. */
 export const FALLBACK_OAI_BASE = 1151.8;
+/** TradeXYZ SoftBank USD print at listing — QFEX is JPY, converted via USDJPY. */
 export const FALLBACK_SB_BASE = 31.235;
+export const FALLBACK_USDJPY = 159.6;
 
 export const SPREAD_RANGES = ["1d", "3d", "7d", "all"] as const;
 export type OaiSbRange = (typeof SPREAD_RANGES)[number];
@@ -37,7 +41,7 @@ export const SPREAD_RANGE_MS: Record<OaiSbRange, number | null> = {
 export type OaiSbSignal = "short_oai" | "long_oai" | "flat";
 
 export interface DexLeg {
-  dex: "io" | "xyz";
+  dex: "io" | "qfex";
   coin: string;
   size: number;
   side: Side | "flat";
@@ -49,6 +53,25 @@ export interface OaiSbPositionsPayload {
   fetchedAt: number;
   oai: DexLeg | null;
   softbank: DexLeg | null;
+}
+
+export function jpyToUsd(
+  jpy: number | null | undefined,
+  usdJpy: number | null | undefined,
+): number | null {
+  if (jpy == null || usdJpy == null || !(jpy > 0 && usdJpy > 0)) return null;
+  return jpy / usdJpy;
+}
+
+export function jpyBookToUsd(
+  levels: BookLevel[] | undefined,
+  usdJpy: number | null | undefined,
+): BookLevel[] | undefined {
+  if (!levels?.length || usdJpy == null || !(usdJpy > 0)) return undefined;
+  return levels.map((level) => ({
+    price: level.price / usdJpy,
+    size: level.size,
+  }));
 }
 
 export function listingSpreadPp(
@@ -158,10 +181,10 @@ export function adviceFor(opts: {
     return `Holding long OAI / short SoftBank. Flatten when ${liveLabel} mean-reverts to +${CONVERGE_PP} pp.`;
   }
   if (signal === "short_oai") {
-    return `Spread ≥ +${UPPER_PP} pp. Enter short Entropy OAI / long TradeXYZ SoftBank; target +${CONVERGE_PP} pp.`;
+    return `Spread ≥ +${UPPER_PP} pp. Enter short Entropy OAI / long QFEX SoftBank; target +${CONVERGE_PP} pp.`;
   }
   if (signal === "long_oai") {
-    return `Spread ≤ ${LOWER_PP} pp. Enter long Entropy OAI / short TradeXYZ SoftBank; target +${CONVERGE_PP} pp.`;
+    return `Spread ≤ ${LOWER_PP} pp. Enter long Entropy OAI / short QFEX SoftBank; target +${CONVERGE_PP} pp.`;
   }
   return `Inside the ±${BAND_PP} pp bands around +${CONVERGE_PP} pp. No new entry.`;
 }

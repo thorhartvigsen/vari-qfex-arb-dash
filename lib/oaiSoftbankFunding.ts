@@ -1,10 +1,12 @@
-import { HL_INFO, LISTING_MS, OAI_COIN, OAI_DEX, SB_COIN, SB_DEX } from "@/lib/oaiSoftbank";
+import { HL_INFO, LISTING_MS, OAI_COIN, OAI_DEX, SB_SYMBOL } from "@/lib/oaiSoftbank";
+import { QFEX_API } from "@/lib/types";
 
 const HOUR_MS = 3_600_000;
 const HL_PAGE = 500;
+const ANN_MULT = 24 * 365;
 
 export function hourlyToAnnPct(rate: number): number {
-  return rate * 24 * 365 * 100;
+  return rate * ANN_MULT * 100;
 }
 
 export interface FundingPoint {
@@ -40,6 +42,14 @@ interface AssetCtx {
   funding?: string | number;
 }
 
+interface QfexFundingResponse {
+  data?: Array<{
+    windowStart?: string;
+    rate?: number | string;
+    intervalMinutes?: number;
+  }>;
+}
+
 async function postInfo<T>(body: unknown): Promise<T> {
   const response = await fetch(HL_INFO, {
     method: "POST",
@@ -57,7 +67,7 @@ async function postInfo<T>(body: unknown): Promise<T> {
   return JSON.parse(text) as T;
 }
 
-async function fundingHistory(coin: string, dex: string): Promise<Map<number, number>> {
+async function oaiFundingHistory(): Promise<Map<number, number>> {
   const byHour = new Map<number, number>();
   let cursor = LISTING_MS;
   const endMs = Date.now();
@@ -65,9 +75,9 @@ async function fundingHistory(coin: string, dex: string): Promise<Map<number, nu
   while (cursor <= endMs) {
     const batch = await postInfo<FundingRow[]>({
       type: "fundingHistory",
-      coin,
+      coin: OAI_COIN,
       startTime: cursor,
-      dex,
+      dex: OAI_DEX,
     });
     if (!Array.isArray(batch) || batch.length === 0) break;
 
@@ -87,14 +97,39 @@ async function fundingHistory(coin: string, dex: string): Promise<Map<number, nu
   return byHour;
 }
 
-async function liveHourly(coin: string, dex: string): Promise<number | null> {
+async function qfexFundingHistory(symbol: string): Promise<Map<number, number>> {
+  const params = new URLSearchParams({
+    intervalMinutes: "60",
+    fromISO: new Date(LISTING_MS).toISOString(),
+    toISO: new Date().toISOString(),
+  });
+  const response = await fetch(
+    `${QFEX_API}/funding/${encodeURIComponent(symbol)}?${params}`,
+    { cache: "no-store", headers: { "User-Agent": "vari-qfex-arb-dash/oai-softbank-funding" } },
+  );
+  const text = await response.text();
+  if (!response.ok) {
+    throw new Error(`QFEX funding failed (${response.status}): ${text.slice(0, 160)}`);
+  }
+  const json = JSON.parse(text) as QfexFundingResponse;
+  const byHour = new Map<number, number>();
+  for (const row of json.data ?? []) {
+    const time = Date.parse(row.windowStart ?? "");
+    const rate = Number(row.rate);
+    if (!Number.isFinite(time) || !Number.isFinite(rate)) continue;
+    byHour.set(Math.floor(time / HOUR_MS) * HOUR_MS, rate);
+  }
+  return byHour;
+}
+
+async function oaiLiveHourly(): Promise<number | null> {
   const payload = await postInfo<[MetaAndCtxs, AssetCtx[]]>({
     type: "metaAndAssetCtxs",
-    dex,
+    dex: OAI_DEX,
   });
   const universe = payload?.[0]?.universe ?? [];
   const ctxs = payload?.[1] ?? [];
-  const idx = universe.findIndex((row) => row.name === coin);
+  const idx = universe.findIndex((row) => row.name === OAI_COIN);
   if (idx < 0) return null;
   const rate = Number(ctxs[idx]?.funding);
   return Number.isFinite(rate) ? rate : null;
@@ -108,11 +143,10 @@ function leg(hourly: number | null): FundingLegLive {
 }
 
 export async function fetchOaiSoftbankFunding(): Promise<OaiSbFundingPayload> {
-  const [oaiHist, sbHist, oaiLive, sbLive] = await Promise.all([
-    fundingHistory(OAI_COIN, OAI_DEX),
-    fundingHistory(SB_COIN, SB_DEX),
-    liveHourly(OAI_COIN, OAI_DEX),
-    liveHourly(SB_COIN, SB_DEX),
+  const [oaiHist, sbHist, oaiLive] = await Promise.all([
+    oaiFundingHistory(),
+    qfexFundingHistory(SB_SYMBOL),
+    oaiLiveHourly(),
   ]);
 
   const times = [...new Set([...oaiHist.keys(), ...sbHist.keys()])].sort((a, b) => a - b);
@@ -128,9 +162,12 @@ export async function fetchOaiSoftbankFunding(): Promise<OaiSbFundingPayload> {
     };
   });
 
+  const lastSbTime = [...sbHist.keys()].sort((a, b) => a - b).at(-1);
+  const lastSb = lastSbTime != null ? (sbHist.get(lastSbTime) ?? null) : null;
+
   return {
     points,
-    live: { oai: leg(oaiLive), sb: leg(sbLive) },
+    live: { oai: leg(oaiLive), sb: leg(lastSb) },
     fetchedAt: Date.now(),
   };
 }

@@ -2,14 +2,21 @@ import { HL_INFO } from "@/lib/entropy";
 import {
   FALLBACK_OAI_BASE,
   FALLBACK_SB_BASE,
+  FALLBACK_USDJPY,
+  JPY_COIN,
+  JPY_DEX,
   OAI_COIN,
-  SB_COIN,
+  SB_SYMBOL,
+  jpyToUsd,
   listingSpreadPp,
   type OaiSbSignal,
 } from "@/lib/oaiSoftbank";
+import { qfexAuthedGet } from "@/lib/qfexAuth";
 
 export const FILLS_FROM_MS = Date.parse("2026-09-17T00:00:00.000Z");
 const CLUSTER_MS = 5 * 60_000;
+const FIVE_MIN = 5 * 60_000;
+const HL_PAGE = 500;
 
 export interface OaiSbFill {
   time: number;
@@ -17,6 +24,7 @@ export interface OaiSbFill {
   side: "buy" | "sell";
   dir: string;
   price: number;
+  priceUsd: number;
   size: number;
   notional: number;
   closedPnl: number | null;
@@ -29,6 +37,7 @@ export interface OaiSbExecution {
   spreadPp: number | null;
   oaiPx: number | null;
   sbPx: number | null;
+  sbPxUsd: number | null;
   oaiSide: "buy" | "sell" | null;
   sbSide: "buy" | "sell" | null;
   oaiSize: number;
@@ -57,6 +66,23 @@ interface HlFill {
   hash?: string;
 }
 
+interface HlCandle {
+  t?: number;
+  c?: string;
+}
+
+interface QfexTradesResponse {
+  data?: Array<{
+    id?: string;
+    order_timestamp?: number;
+    symbol?: string;
+    price?: number;
+    quantity?: number;
+    side?: string;
+    realised_pnl_change?: number;
+  }>;
+}
+
 async function postFills(body: Record<string, unknown>): Promise<HlFill[]> {
   const response = await fetch(HL_INFO, {
     method: "POST",
@@ -72,9 +98,49 @@ async function postFills(body: Record<string, unknown>): Promise<HlFill[]> {
   return Array.isArray(json.data) ? json.data : [];
 }
 
-function parseFill(row: HlFill): OaiSbFill | null {
+async function fetchUsdJpy5m(startMs: number, endMs: number): Promise<Map<number, number>> {
+  const out = new Map<number, number>();
+  let cursor = startMs;
+  while (cursor < endMs) {
+    const response = await fetch(HL_INFO, {
+      method: "POST",
+      cache: "no-store",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        type: "candleSnapshot",
+        req: {
+          coin: JPY_COIN,
+          interval: "5m",
+          startTime: cursor,
+          endTime: endMs,
+          dex: JPY_DEX,
+        },
+      }),
+    });
+    if (!response.ok) break;
+    const batch = (await response.json()) as HlCandle[];
+    if (!Array.isArray(batch) || batch.length === 0) break;
+    for (const row of batch) {
+      const t = Number(row.t);
+      const close = Number(row.c);
+      if (!Number.isFinite(t) || !(close > 0)) continue;
+      out.set(Math.floor(t / FIVE_MIN) * FIVE_MIN, close);
+    }
+    const lastT = Math.max(...batch.map((row) => Number(row.t) || 0));
+    if (!Number.isFinite(lastT) || lastT <= cursor || batch.length < HL_PAGE) break;
+    cursor = lastT + 1;
+  }
+  return out;
+}
+
+function fxAt(time: number, closes: Map<number, number>, fallback: number): number {
+  const key = Math.floor(time / FIVE_MIN) * FIVE_MIN;
+  return closes.get(key) ?? fallback;
+}
+
+function parseHlFill(row: HlFill): OaiSbFill | null {
   const coin = String(row.coin ?? "");
-  if (coin !== OAI_COIN && coin !== SB_COIN) return null;
+  if (coin !== OAI_COIN) return null;
   const time = Number(row.time);
   const price = Number(row.px);
   const size = Number(row.sz);
@@ -89,6 +155,7 @@ function parseFill(row: HlFill): OaiSbFill | null {
     side,
     dir: String(row.dir ?? ""),
     price,
+    priceUsd: price,
     size,
     notional: price * size,
     closedPnl: Number.isFinite(Number(row.closedPnl)) ? Number(row.closedPnl) : null,
@@ -96,23 +163,72 @@ function parseFill(row: HlFill): OaiSbFill | null {
   };
 }
 
-function vwap(fills: OaiSbFill[]): { px: number; size: number; notional: number; side: "buy" | "sell" | null } | null {
+function parseQfexTrade(
+  row: NonNullable<QfexTradesResponse["data"]>[number],
+  usdJpyCloses: Map<number, number>,
+  fallbackFx: number,
+): OaiSbFill | null {
+  const symbol = String(row.symbol ?? SB_SYMBOL);
+  if (symbol !== SB_SYMBOL) return null;
+  let time = Number(row.order_timestamp ?? 0);
+  if (!(time > 0)) return null;
+  if (time < 1e12) time *= 1000;
+  if (time < FILLS_FROM_MS) return null;
+  const price = Number(row.price);
+  const size = Number(row.quantity);
+  if (!(price > 0) || !(size > 0)) return null;
+  const rawSide = String(row.side ?? "").toUpperCase();
+  const side: "buy" | "sell" | null =
+    rawSide === "BUY" || rawSide === "B" || rawSide === "LONG"
+      ? "buy"
+      : rawSide === "SELL" || rawSide === "A" || rawSide === "SHORT"
+        ? "sell"
+        : null;
+  if (!side) return null;
+  const fx = fxAt(time, usdJpyCloses, fallbackFx);
+  const priceUsd = jpyToUsd(price, fx);
+  if (priceUsd == null) return null;
+  return {
+    time,
+    coin: SB_SYMBOL,
+    side,
+    dir: "",
+    price,
+    priceUsd,
+    size,
+    notional: priceUsd * size,
+    closedPnl:
+      row.realised_pnl_change !== undefined ? Number(row.realised_pnl_change) : null,
+    tid: String(row.id ?? `${SB_SYMBOL}-${time}`),
+  };
+}
+
+function vwap(fills: OaiSbFill[]): {
+  px: number;
+  pxUsd: number;
+  size: number;
+  notional: number;
+  side: "buy" | "sell" | null;
+} | null {
   if (fills.length === 0) return null;
   let qty = 0;
-  let notional = 0;
+  let notionalNative = 0;
+  let notionalUsd = 0;
   let buyQty = 0;
   let sellQty = 0;
   for (const fill of fills) {
     qty += fill.size;
-    notional += fill.notional;
+    notionalNative += fill.price * fill.size;
+    notionalUsd += fill.notional;
     if (fill.side === "buy") buyQty += fill.size;
     else sellQty += fill.size;
   }
-  if (!(qty > 0) || !(notional > 0)) return null;
+  if (!(qty > 0) || !(notionalNative > 0)) return null;
   return {
-    px: notional / qty,
+    px: notionalNative / qty,
+    pxUsd: notionalUsd / qty,
     size: qty,
-    notional,
+    notional: notionalUsd,
     side: buyQty === sellQty ? null : buyQty > sellQty ? "buy" : "sell",
   };
 }
@@ -136,7 +252,7 @@ function clusterExecutions(
   return groups
     .map((group) => {
       const oai = vwap(group.filter((f) => f.coin === OAI_COIN));
-      const sb = vwap(group.filter((f) => f.coin === SB_COIN));
+      const sb = vwap(group.filter((f) => f.coin === SB_SYMBOL));
       let kind: OaiSbExecution["kind"] = "flat";
       if (oai?.side === "sell" && sb?.side === "buy") kind = "short_oai";
       else if (oai?.side === "buy" && sb?.side === "sell") kind = "long_oai";
@@ -144,9 +260,10 @@ function clusterExecutions(
       return {
         time: group[0].time,
         kind,
-        spreadPp: listingSpreadPp(oai?.px, sb?.px, oaiBase, sbBase),
+        spreadPp: listingSpreadPp(oai?.pxUsd, sb?.pxUsd, oaiBase, sbBase),
         oaiPx: oai?.px ?? null,
         sbPx: sb?.px ?? null,
+        sbPxUsd: sb?.pxUsd ?? null,
         oaiSide: oai?.side ?? null,
         sbSide: sb?.side ?? null,
         oaiSize: oai?.size ?? 0,
@@ -163,18 +280,30 @@ export async function fetchOaiSoftbankFills(): Promise<OaiSbFillsPayload> {
   const wallet = process.env.HL_WALLET_ADDRESS;
   if (!wallet) throw new Error("Missing HL_WALLET_ADDRESS");
 
-  const [byTime, recent] = await Promise.all([
+  const [byTime, recent, qfexTrades, usdJpy] = await Promise.all([
     postFills({
       type: "userFillsByTime",
       user: wallet,
       startTime: FILLS_FROM_MS,
     }),
     postFills({ type: "userFills", user: wallet }),
+    qfexAuthedGet<QfexTradesResponse>(
+      `/user/trade?symbol=${encodeURIComponent(SB_SYMBOL)}&limit=100`,
+    ),
+    fetchUsdJpy5m(FILLS_FROM_MS, Date.now()),
   ]);
+
+  const fallbackFx =
+    [...usdJpy.values()].at(-1) ?? FALLBACK_USDJPY;
 
   const byTid = new Map<string, OaiSbFill>();
   for (const row of [...byTime, ...recent]) {
-    const fill = parseFill(row);
+    const fill = parseHlFill(row);
+    if (!fill) continue;
+    byTid.set(fill.tid, fill);
+  }
+  for (const row of qfexTrades.data ?? []) {
+    const fill = parseQfexTrade(row, usdJpy, fallbackFx);
     if (!fill) continue;
     byTid.set(fill.tid, fill);
   }

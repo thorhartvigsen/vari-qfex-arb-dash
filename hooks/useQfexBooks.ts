@@ -76,6 +76,8 @@ export function useQfexBooks(symbols: string[]): {
             [message.symbol as string]: {
               bid,
               ask,
+              bids,
+              asks,
               updatedAt: Date.now(),
             },
           }));

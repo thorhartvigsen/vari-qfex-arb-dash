@@ -5,17 +5,20 @@ import { QuoteColumn, tone } from "@/components/arbUi";
 import { formatPp, formatPrice, formatSigned } from "@/lib/format";
 import {
   CONVERGE_PP,
+  JPY_DECIMALS,
   LOWER_PP,
   OAI_COIN,
   OAI_DECIMALS,
-  SB_COIN,
   SB_DECIMALS,
+  SB_SYMBOL,
   SIZE_USD,
   UPPER_PP,
   adviceFor,
   bookMid,
   flattenPnlPp,
   hedgeKind,
+  jpyBookToUsd,
+  jpyToUsd,
   listingSpreadPp,
   longOaiBookSpread,
   shortOaiBookSpread,
@@ -32,6 +35,7 @@ interface OaiSoftbankCardProps {
   sbLeg: DexLeg | null;
   oaiBase: number;
   sbBase: number;
+  usdJpy: number | null;
 }
 
 function formatSize(size: number | null | undefined): string {
@@ -46,12 +50,16 @@ function LegSummary({
   coin,
   decimals,
   leg,
+  pricePrefix = "",
+  usdHint,
 }: {
   label: string;
   accent: string;
   coin: string;
   decimals: number;
   leg: DexLeg | null;
+  pricePrefix?: string;
+  usdHint?: string | null;
 }) {
   const side = leg?.side ?? "flat";
   const size = leg?.size ?? 0;
@@ -68,8 +76,14 @@ function LegSummary({
         {side !== "flat" ? `  ·  ${formatSize(Math.abs(size))}` : ""}
       </p>
       <p className="font-mono text-sm" style={{ opacity: 0.85 }}>
-        Entry {formatPrice(leg?.entryPrice ?? null, decimals)}
+        Entry {pricePrefix}
+        {formatPrice(leg?.entryPrice ?? null, decimals)}
       </p>
+      {usdHint ? (
+        <p className="font-mono text-xs" style={{ opacity: 0.7 }}>
+          {usdHint}
+        </p>
+      ) : null}
       {leg?.unrealizedPnl != null ? (
         <p className="font-mono text-xs" style={{ color: tone(leg.unrealizedPnl) }}>
           uPnL {formatSigned(leg.unrealizedPnl, 2)}
@@ -166,22 +180,37 @@ export default function OaiSoftbankCard({
   sbLeg,
   oaiBase,
   sbBase,
+  usdJpy,
 }: OaiSoftbankCardProps) {
   const oaiMid = bookMid(oaiBook?.bid, oaiBook?.ask);
-  const sbMid = bookMid(sbBook?.bid, sbBook?.ask);
-  const liveMid = listingSpreadPp(oaiMid, sbMid, oaiBase, sbBase);
-  const shortBook = shortOaiBookSpread(oaiBook?.bid, sbBook?.ask, oaiBase, sbBase);
-  const longBook = longOaiBookSpread(oaiBook?.ask, sbBook?.bid, oaiBase, sbBase);
-  const short1k = sizeWalkSpread(oaiBook?.bids, sbBook?.asks, oaiBase, sbBase);
-  const long1k = sizeWalkSpread(oaiBook?.asks, sbBook?.bids, oaiBase, sbBase);
+  const sbJpyMid = bookMid(sbBook?.bid, sbBook?.ask);
+  const sbUsdMid = jpyToUsd(sbJpyMid, usdJpy);
+  const sbUsdBid = jpyToUsd(sbBook?.bid, usdJpy);
+  const sbUsdAsk = jpyToUsd(sbBook?.ask, usdJpy);
+  const liveMid = listingSpreadPp(oaiMid, sbUsdMid, oaiBase, sbBase);
+  const shortBook = shortOaiBookSpread(oaiBook?.bid, sbUsdAsk, oaiBase, sbBase);
+  const longBook = longOaiBookSpread(oaiBook?.ask, sbUsdBid, oaiBase, sbBase);
+  const short1k = sizeWalkSpread(
+    oaiBook?.bids,
+    jpyBookToUsd(sbBook?.asks, usdJpy),
+    oaiBase,
+    sbBase,
+  );
+  const long1k = sizeWalkSpread(
+    oaiBook?.asks,
+    jpyBookToUsd(sbBook?.bids, usdJpy),
+    oaiBase,
+    sbBase,
+  );
 
   const kind = hedgeKind(oaiLeg, sbLeg);
   const signal = signalFromSpread(liveMid);
   const bothOpen = kind !== "flat";
+  const sbEntryUsd = jpyToUsd(sbLeg?.entryPrice, usdJpy);
 
   const entrySpread = useMemo(
-    () => listingSpreadPp(oaiLeg?.entryPrice, sbLeg?.entryPrice, oaiBase, sbBase),
-    [oaiLeg?.entryPrice, sbLeg?.entryPrice, oaiBase, sbBase],
+    () => listingSpreadPp(oaiLeg?.entryPrice, sbEntryUsd, oaiBase, sbBase),
+    [oaiLeg?.entryPrice, sbEntryUsd, oaiBase, sbBase],
   );
 
   const exitSpread =
@@ -207,6 +236,13 @@ export default function OaiSoftbankCard({
         ? "Buy more OAI ask, sell more SoftBank bid"
         : "No hedge open";
 
+  const sbUsdHint =
+    sbEntryUsd != null
+      ? `$${formatPrice(sbEntryUsd, 3)}  ·  USDJPY ${formatPrice(usdJpy, JPY_DECIMALS)}`
+      : usdJpy != null
+        ? `USDJPY ${formatPrice(usdJpy, JPY_DECIMALS)}`
+        : null;
+
   return (
     <section
       className="flex flex-col gap-5 rounded-lg p-4 sm:p-5"
@@ -218,10 +254,12 @@ export default function OaiSoftbankCard({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="text-xl font-semibold" style={{ color: "var(--arb-light)" }}>
-            Entropy OAI × TradeXYZ SoftBank
+            Entropy OAI × QFEX SoftBank
           </h2>
           <p className="text-sm" style={{ color: "var(--arb-text)", opacity: 0.8 }}>
             Listing-relative spread vs +{CONVERGE_PP} pp mid · enter at {LOWER_PP} / +{UPPER_PP}
+            {" · "}
+            JPY converted to USD
           </p>
         </div>
         <div className="text-right">
@@ -258,14 +296,22 @@ export default function OaiSoftbankCard({
           className="hidden w-px sm:block"
           style={{ backgroundColor: "var(--arb-border)" }}
         />
-        <QuoteColumn
-          title="TradeXYZ SoftBank"
-          subtitle={SB_COIN}
-          book={sbBook}
-          decimals={SB_DECIMALS}
-          accent="var(--arb-qfex)"
-          showAge
-        />
+        <div className="min-w-0 flex-1 space-y-1">
+          <QuoteColumn
+            title="QFEX SoftBank"
+            subtitle={SB_SYMBOL}
+            book={sbBook}
+            decimals={SB_DECIMALS}
+            accent="var(--arb-qfex)"
+            showAge
+            pricePrefix="¥"
+          />
+          <p className="font-mono text-xs" style={{ opacity: 0.75 }}>
+            {sbUsdMid != null
+              ? `$${formatPrice(sbUsdMid, 3)}  ·  USDJPY ${formatPrice(usdJpy, JPY_DECIMALS)}`
+              : "Waiting for USDJPY"}
+          </p>
+        </div>
       </div>
 
       <div
@@ -315,11 +361,13 @@ export default function OaiSoftbankCard({
             leg={oaiLeg}
           />
           <LegSummary
-            label="TradeXYZ"
+            label="QFEX"
             accent="var(--arb-qfex)"
-            coin={SB_COIN}
+            coin={SB_SYMBOL}
             decimals={SB_DECIMALS}
             leg={sbLeg}
+            pricePrefix="¥"
+            usdHint={sbUsdHint}
           />
         </div>
       </div>

@@ -2,7 +2,7 @@
 
 Railway worker in this repo (`oai-softbank-alerts/`). The Next.js dash still deploys on Vercel from the repo root.
 
-Watches Entropy `io:OAI` vs TradeXYZ `xyz:SOFTBANK` listing-relative spread and pings Telegram when it **crosses**:
+Watches Entropy `io:OAI` vs QFEX `SOFTBANK-JPY` listing-relative spread (JPY converted to USD with TradeXYZ `xyz:JPY`) and pings Telegram when it **crosses**:
 
 | Level | Action |
 |---|---|
@@ -10,7 +10,7 @@ Watches Entropy `io:OAI` vs TradeXYZ `xyz:SOFTBANK` listing-relative spread and 
 | **+8** | flatten (converge) |
 | **−2** | long OAI / short SoftBank |
 
-Spread is percentage points: OAI % since 2 Sep 13:00 UTC listing − SoftBank % since listing. Same series as `/oai-softbank`.
+Spread is percentage points: OAI % since 2 Sep 13:00 UTC listing − SoftBank **USD** % since listing (`¥ / USDJPY`). Same series as `/oai-softbank`.
 
 Each level fires once per visit, then re-arms after the print moves **0.75 pp** away so a hover on +8 does not spam.
 

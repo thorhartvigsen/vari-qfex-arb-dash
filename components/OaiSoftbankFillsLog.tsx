@@ -98,7 +98,7 @@ export default function OaiSoftbankFillsLog({
                 {row.oaiSize > 0 ? ` × ${row.oaiSize.toFixed(3)}` : ""}
               </td>
               <td className="px-3 py-2 font-mono text-xs">
-                {sideLabel(row.sbSide)} {formatPrice(row.sbPx, SB_DECIMALS)}
+                {sideLabel(row.sbSide)} ¥{formatPrice(row.sbPx, SB_DECIMALS)}
                 {row.sbSize > 0 ? ` × ${row.sbSize.toFixed(3)}` : ""}
               </td>
               <td className="px-3 py-2 font-mono text-xs">
