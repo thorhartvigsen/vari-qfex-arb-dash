@@ -11,8 +11,8 @@ import {
   YAxis,
 } from "recharts";
 import { formatChartTime, formatSigned, formatUsd } from "@/lib/format";
-import { pnlStats } from "@/lib/oaiSoftbankPnl";
-import type { PnlPoint } from "@/lib/pnlStore";
+import { pnlStats } from "@/lib/pnlTypes";
+import type { PnlPoint } from "@/lib/pnlTypes";
 import { THEME } from "@/lib/types";
 
 interface OaiSoftbankPnlChartProps {

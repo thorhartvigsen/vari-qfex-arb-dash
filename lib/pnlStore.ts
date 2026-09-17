@@ -1,18 +1,15 @@
+import "server-only";
 import { promises as fs } from "fs";
 import path from "path";
 import { get, put } from "@vercel/blob";
+import type { PnlPoint } from "@/lib/pnlTypes";
+
+export type { PnlPoint };
 
 export const PNL_BLOB_PATH = "oai-softbank/pnl.json";
 export const SNAPSHOT_MS = 30 * 60 * 1000;
 export const SNAPSHOT_DEDUP_MS = 25 * 60 * 1000;
 export const MAX_PNL_POINTS = 20_000;
-
-export interface PnlPoint {
-  time: number;
-  qfex: number;
-  hl: number;
-  total: number;
-}
 
 export interface PnlStore {
   updatedAt: string;

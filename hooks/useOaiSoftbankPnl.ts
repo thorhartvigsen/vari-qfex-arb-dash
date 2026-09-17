@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { OaiSbPnlPayload } from "@/lib/oaiSoftbankPnl";
+import type { OaiSbPnlPayload } from "@/lib/pnlTypes";
 
 const POLL_MS = 60_000;
 
