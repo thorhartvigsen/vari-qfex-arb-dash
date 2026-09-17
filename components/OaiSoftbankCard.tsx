@@ -133,14 +133,12 @@ function BookRow({
   caption,
   value,
   value1k,
-  filled1k,
   active,
 }: {
   label: string;
   caption: string;
   value: number | null;
   value1k: number | null;
-  filled1k: boolean;
   active: boolean;
 }) {
   return (
@@ -161,7 +159,7 @@ function BookRow({
         </span>
       </p>
       <p className="font-mono text-sm" style={{ color: tone(value1k) }}>
-        {filled1k ? formatPp(value1k, 3) : "—"}
+        {formatPp(value1k, 3)}
         <span className="text-xs" style={{ opacity: 0.7 }}>
           {`  $${SIZE_USD.toLocaleString()}`}
         </span>
@@ -326,7 +324,6 @@ export default function OaiSoftbankCard({
           caption="Sell OAI bids, buy SoftBank asks"
           value={shortBook}
           value1k={short1k.spreadPp}
-          filled1k={short1k.filled}
           active={bothOpen && kind === "short_oai"}
         />
         <BookRow
@@ -334,7 +331,6 @@ export default function OaiSoftbankCard({
           caption="Buy OAI asks, sell SoftBank bids"
           value={longBook}
           value1k={long1k.spreadPp}
-          filled1k={long1k.filled}
           active={bothOpen && kind === "long_oai"}
         />
       </div>
