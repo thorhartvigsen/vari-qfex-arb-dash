@@ -12,7 +12,7 @@ Watches Entropy `io:OAI` vs QFEX `SOFTBANK-JPY` listing-relative spread (JPY con
 
 Spread is percentage points: OAI % since 2 Sep 13:00 UTC listing − SoftBank **USD** % since listing (`¥ / USDJPY`). Same series as `/oai-softbank`.
 
-Each spread level fires once per visit, then re-arms after the print moves **0.75 pp** away so a hover on +8 does not spam.
+Each spread level fires once per visit, then re-arms after the print moves **0.75 pp** away. A second **+8 converge** ping is skipped for **12 hours** if the last spread message was also +8; +18 / −2 always send.
 
 Liquidation distance (chat `-5325885280`) fires when **either venue** is **15%**, then **10%**, then **5%** of price from its liquidation. Re-arms after the buffer recovers 2 pp above that level. Checked every **5 seconds**. QFEX SoftBank liq is in JPY (QFEX PnLs yen 1:1 into USDC).
 

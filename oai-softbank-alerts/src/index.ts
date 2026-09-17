@@ -6,6 +6,7 @@ loadDotenv({ path: resolve(process.cwd(), ".env.local"), quiet: true });
 loadDotenv({ path: resolve(process.cwd(), ".env"), quiet: true });
 
 import {
+  convergeCooldownMs,
   fmtPp,
   fmtPx,
   healthPort,
@@ -100,6 +101,7 @@ const oaiLiqArmed = freshLiqArmed();
 const sbLiqArmed = freshLiqArmed();
 let prevSpread: number | null = null;
 let lastSentId: AlertLevel["id"] | null = null;
+let lastConvergeAt = 0;
 let lastLiqPoll = 0;
 let oaiBase = 0;
 let sbBase = 0;
@@ -211,12 +213,20 @@ async function tick(): Promise<void> {
 
   for (const level of hits) {
     if (level.id === "mid" && lastSentId === "mid") {
-      console.log(`[alert] skip consecutive converge @ ${fmtPp(spread)}`);
-      continue;
+      const wait = convergeCooldownMs();
+      const elapsed = Date.now() - lastConvergeAt;
+      if (wait > 0 && elapsed < wait) {
+        const leftMin = Math.ceil((wait - elapsed) / 60_000);
+        console.log(
+          `[alert] skip converge cooldown ${leftMin}m left @ ${fmtPp(spread)}`,
+        );
+        continue;
+      }
     }
     const text = alertBody(level, spread, oai, sbJpy, sbUsd, usdJpy);
     await telegramSend(telegramChatId(), text);
     lastSentId = level.id;
+    if (level.id === "mid") lastConvergeAt = Date.now();
     health.lastAlert = `${level.title} @ ${fmtPp(spread)}`;
     health.alerts += 1;
     console.log(

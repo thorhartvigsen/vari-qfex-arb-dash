@@ -50,6 +50,13 @@ export function hysteresisPp(): number {
   return Number.isFinite(raw) && raw >= 0 ? raw : 0.75;
 }
 
+/** Skip another +8 converge alert if the last spread ping was also +8, for this long. */
+export function convergeCooldownMs(): number {
+  const hours = Number(process.env.CONVERGE_COOLDOWN_HOURS);
+  if (Number.isFinite(hours) && hours >= 0) return hours * 60 * 60 * 1000;
+  return 12 * 60 * 60 * 1000;
+}
+
 export function pnlPingUrl(): string {
   return envString(
     "PNL_PING_URL",
