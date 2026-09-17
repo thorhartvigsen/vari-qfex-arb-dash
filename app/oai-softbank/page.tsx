@@ -3,11 +3,13 @@
 import { Suspense, useMemo, useState } from "react";
 import OaiSoftbankCard from "@/components/OaiSoftbankCard";
 import OaiSoftbankChart from "@/components/OaiSoftbankChart";
+import OaiSoftbankFillsLog from "@/components/OaiSoftbankFillsLog";
 import OaiSoftbankFundingChart from "@/components/OaiSoftbankFundingChart";
 import SiteNav from "@/components/SiteNav";
 import ThemeToggle from "@/components/ThemeToggle";
 import ToggleGroup from "@/components/ToggleGroup";
 import { useHlBook } from "@/hooks/useHlBook";
+import { useOaiSoftbankFills } from "@/hooks/useOaiSoftbankFills";
 import { useOaiSoftbankFunding } from "@/hooks/useOaiSoftbankFunding";
 import { useOaiSoftbankPositions } from "@/hooks/useOaiSoftbankPositions";
 import { useOaiSoftbankSpread } from "@/hooks/useOaiSoftbankSpread";
@@ -34,6 +36,7 @@ const RANGE_LABELS: Record<OaiSbRange, string> = {
 export default function OaiSoftbankPage() {
   const [spreadRange, setSpreadRange] = useState<OaiSbRange>("7d");
   const { data, error: posError } = useOaiSoftbankPositions();
+  const { data: fills, error: fillsError } = useOaiSoftbankFills();
   const { book: oaiBook, connected: oaiConnected, error: oaiError } = useHlBook(OAI_COIN);
   const { book: sbBook, connected: sbConnected, error: sbError } = useHlBook(SB_COIN);
   const {
@@ -174,6 +177,24 @@ export default function OaiSoftbankPage() {
           live={funding?.live ?? null}
           loading={fundingLoading}
           error={fundingError}
+        />
+      </section>
+
+      <section className="space-y-3">
+        <div>
+          <h2
+            className="text-lg font-semibold"
+            style={{ color: "var(--arb-light)" }}
+          >
+            Execution log
+          </h2>
+          <p className="text-sm" style={{ color: "var(--arb-text)", opacity: 0.8 }}>
+            Your Hyperliquid fills from 17 Sep 2026 00:00 UTC · clustered within 5 minutes · listing-relative entry spread
+          </p>
+        </div>
+        <OaiSoftbankFillsLog
+          executions={fills?.executions ?? []}
+          error={fillsError}
         />
       </section>
     </main>

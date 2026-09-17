@@ -70,7 +70,7 @@ export function useHlBook(coin: string | null): {
           const bid = topOfBook(bids);
           const ask = topOfBook(asks);
           if (bid === null || ask === null) return;
-          setBook({ bid, ask, updatedAt: Date.now() });
+          setBook({ bid, ask, bids, asks, updatedAt: Date.now() });
         } catch {
           // ignore malformed frames
         }

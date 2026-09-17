@@ -1,5 +1,6 @@
+import { walkNotional } from "@/lib/book";
 import { HL_INFO } from "@/lib/entropy";
-import type { Side } from "@/lib/types";
+import type { BookLevel, Side } from "@/lib/types";
 
 export { HL_INFO };
 
@@ -17,6 +18,7 @@ export const LOWER_PP = CONVERGE_PP - BAND_PP; // -2
 
 export const OAI_DECIMALS = 2;
 export const SB_DECIMALS = 3;
+export const SIZE_USD = 1_000;
 
 /** First overlapping 5m print from the listing window; used until history loads. */
 export const FALLBACK_OAI_BASE = 1151.8;
@@ -107,6 +109,22 @@ export function longOaiBookSpread(
   sbBase: number,
 ): number | null {
   return listingSpreadPp(oaiAsk, sbBid, oaiBase, sbBase);
+}
+
+export function sizeWalkSpread(
+  oaiLevels: BookLevel[] | undefined,
+  sbLevels: BookLevel[] | undefined,
+  oaiBase: number,
+  sbBase: number,
+  usd = SIZE_USD,
+): { spreadPp: number | null; filled: boolean } {
+  const oai = oaiLevels?.length ? walkNotional(oaiLevels, usd) : null;
+  const sb = sbLevels?.length ? walkNotional(sbLevels, usd) : null;
+  if (!oai || !sb) return { spreadPp: null, filled: false };
+  return {
+    spreadPp: listingSpreadPp(oai.avgPrice, sb.avgPrice, oaiBase, sbBase),
+    filled: oai.fullyFilled && sb.fullyFilled,
+  };
 }
 
 export function flattenPnlPp(

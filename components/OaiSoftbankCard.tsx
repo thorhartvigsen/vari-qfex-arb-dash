@@ -10,6 +10,7 @@ import {
   OAI_DECIMALS,
   SB_COIN,
   SB_DECIMALS,
+  SIZE_USD,
   UPPER_PP,
   adviceFor,
   bookMid,
@@ -19,6 +20,7 @@ import {
   longOaiBookSpread,
   shortOaiBookSpread,
   signalFromSpread,
+  sizeWalkSpread,
   type DexLeg,
 } from "@/lib/oaiSoftbank";
 import type { Bbo } from "@/lib/types";
@@ -116,11 +118,15 @@ function BookRow({
   label,
   caption,
   value,
+  value1k,
+  filled1k,
   active,
 }: {
   label: string;
   caption: string;
   value: number | null;
+  value1k: number | null;
+  filled1k: boolean;
   active: boolean;
 }) {
   return (
@@ -136,6 +142,15 @@ function BookRow({
       </p>
       <p className="font-mono text-base" style={{ color: tone(value) }}>
         {formatPp(value, 3)}
+        <span className="text-xs" style={{ opacity: 0.7 }}>
+          {"  "}TOB
+        </span>
+      </p>
+      <p className="font-mono text-sm" style={{ color: tone(value1k) }}>
+        {filled1k ? formatPp(value1k, 3) : "—"}
+        <span className="text-xs" style={{ opacity: 0.7 }}>
+          {`  $${SIZE_USD.toLocaleString()}`}
+        </span>
       </p>
       <p className="text-xs" style={{ opacity: 0.7 }}>
         {caption}
@@ -157,6 +172,8 @@ export default function OaiSoftbankCard({
   const liveMid = listingSpreadPp(oaiMid, sbMid, oaiBase, sbBase);
   const shortBook = shortOaiBookSpread(oaiBook?.bid, sbBook?.ask, oaiBase, sbBase);
   const longBook = longOaiBookSpread(oaiBook?.ask, sbBook?.bid, oaiBase, sbBase);
+  const short1k = sizeWalkSpread(oaiBook?.bids, sbBook?.asks, oaiBase, sbBase);
+  const long1k = sizeWalkSpread(oaiBook?.asks, sbBook?.bids, oaiBase, sbBase);
 
   const kind = hedgeKind(oaiLeg, sbLeg);
   const signal = signalFromSpread(liveMid);
@@ -260,14 +277,18 @@ export default function OaiSoftbankCard({
       >
         <BookRow
           label="Short OAI / long SoftBank"
-          caption="Sell OAI bid, buy SoftBank ask"
+          caption="Sell OAI bids, buy SoftBank asks"
           value={shortBook}
+          value1k={short1k.spreadPp}
+          filled1k={short1k.filled}
           active={bothOpen && kind === "short_oai"}
         />
         <BookRow
           label="Long OAI / short SoftBank"
-          caption="Buy OAI ask, sell SoftBank bid"
+          caption="Buy OAI asks, sell SoftBank bids"
           value={longBook}
+          value1k={long1k.spreadPp}
+          filled1k={long1k.filled}
           active={bothOpen && kind === "long_oai"}
         />
       </div>

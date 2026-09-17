@@ -27,6 +27,8 @@ export interface Bbo {
   ask: number | null;
   mark?: number | null;
   updatedAt?: number | null;
+  bids?: BookLevel[];
+  asks?: BookLevel[];
 }
 
 export interface PairConfig {
