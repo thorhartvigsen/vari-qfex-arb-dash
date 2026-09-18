@@ -12,13 +12,13 @@ export default function OaiSoftbankSignalPanel() {
         </h2>
         <p className="text-sm" style={{ color: "var(--arb-text)", opacity: 0.8 }}>
           Listing-relative mid {MID_PP}% · max {MAX_LEV}× of the thinner venue ·
-          scale-in and take-profit are separate (hysteresis)
+          scale-in fires on bid/ask of the entry side; take-profit uses mid
         </p>
       </div>
       <div className="grid gap-3 md:grid-cols-2">
         <TierTable
           title="Scale-in"
-          caption="Add size when the print is this far from 8%"
+          caption="Add size when the executable print is this far from 8%"
           rows={ENTRY_TIERS.map((t) => ({
             lev: t.lev,
             dist: t.distPp,
@@ -27,7 +27,7 @@ export default function OaiSoftbankSignalPanel() {
         />
         <TierTable
           title="Take-profit"
-          caption="Reduce to this leverage as the print comes back toward 8%"
+          caption="Reduce to this leverage as the mid comes back toward 8%"
           rows={EXIT_TIERS.map((t) => ({
             lev: t.lev,
             dist: t.distPp,
@@ -36,10 +36,13 @@ export default function OaiSoftbankSignalPanel() {
         />
       </div>
       <p className="text-xs" style={{ color: "var(--arb-text)", opacity: 0.7 }}>
-        Above 8%: short OAI / long SoftBank. Below 8%: long OAI / short SoftBank.
-        Legs paired in account dollars. Scale-in size is the gap to target, capped
-        to paired book depth that still holds the entry rung. Flatten / TP does
-        not wait on that spread — filling both legs comes first.
+        Above 8%: short OAI (hit bid) / long SoftBank (lift ask). Below 8%: long
+        OAI (lift ask) / short SoftBank (hit bid). Watching and TP use mids.
+        Scale-in only fires if that touch is still on the same side of 8% and
+        far enough for the rung. Legs paired in account dollars. Size is the
+        gap to target, capped to paired book depth that still holds the entry
+        rung. Flatten / TP does not wait on that spread — filling both legs
+        comes first.
       </p>
     </section>
   );

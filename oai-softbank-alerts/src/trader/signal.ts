@@ -76,15 +76,25 @@ export interface BookPlan {
   action: TradeAction;
 }
 
+/**
+ * `midSpreadPp` chooses side of 8% and take-profit.
+ * `entrySpreadPp` is the bid/ask we would hit to add size; scale-in uses that.
+ */
 export function planBook(
-  spreadPp: number,
+  midSpreadPp: number,
   oaiUsd: number,
   sbUsd: number,
   baseUsd: number,
+  entrySpreadPp: number | null = midSpreadPp,
 ): BookPlan {
-  const entryLev = entryLeverage(spreadPp);
-  const exitLev = exitLeverage(spreadPp);
-  const signalDir = sideOfMid(spreadPp);
+  const signalDir = sideOfMid(midSpreadPp);
+  const entryLev =
+    entrySpreadPp != null &&
+    ((signalDir === "short_oai" && entrySpreadPp > MID_PP) ||
+      (signalDir === "long_oai" && entrySpreadPp < MID_PP))
+      ? entryLeverage(entrySpreadPp)
+      : 0;
+  const exitLev = exitLeverage(midSpreadPp);
   const posDir = positionDir(oaiUsd, sbUsd);
   const currentLev = currentLeverage(oaiUsd, sbUsd, baseUsd);
   const eps = LEV_HOLD_EPS;
