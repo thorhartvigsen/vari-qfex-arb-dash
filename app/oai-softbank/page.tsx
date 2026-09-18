@@ -8,6 +8,8 @@ import OaiSoftbankFundingChart from "@/components/OaiSoftbankFundingChart";
 import OaiSoftbankPnlChart, {
   type PnlSeries,
 } from "@/components/OaiSoftbankPnlChart";
+import OaiSoftbankSignalPanel from "@/components/OaiSoftbankSignalPanel";
+import OaiSoftbankTraderLight from "@/components/OaiSoftbankTraderLight";
 import SiteNav from "@/components/SiteNav";
 import ThemeToggle from "@/components/ThemeToggle";
 import ToggleGroup from "@/components/ToggleGroup";
@@ -141,7 +143,10 @@ export default function OaiSoftbankPage() {
               </p>
             </div>
           </div>
-          <ThemeToggle />
+          <div className="flex shrink-0 flex-col items-end gap-3">
+            <ThemeToggle />
+            <OaiSoftbankTraderLight />
+          </div>
         </div>
 
         {errors.map((message) => (
@@ -273,6 +278,8 @@ export default function OaiSoftbankPage() {
           series={pnlSeries}
         />
       </section>
+
+      <OaiSoftbankSignalPanel />
     </main>
   );
 }

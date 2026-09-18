@@ -20,6 +20,8 @@ import {
   pollMs,
   telegramChatId,
   telegramLiqChatId,
+  traderLive,
+  tradingEnabled,
 } from "./config.ts";
 import { fetchListingBases, fetchLiveMids } from "./hl.ts";
 import { crossedLevels, freshArmed, type AlertLevel } from "./levels.ts";
@@ -35,6 +37,14 @@ import {
   type LiqSnapshot,
 } from "./liq.ts";
 import { esc, telegramSend } from "./telegram.ts";
+import {
+  emptyTrader,
+  ensureHlLeverage,
+  runTraderTick,
+  sendTraderStarted,
+} from "./trader/tick.ts";
+import { createHlExecFromEnv, resolveIoAsset } from "./trader/hlExec.ts";
+import { QfexTradeClient } from "./trader/qfexExec.ts";
 
 const once = process.argv.includes("--once");
 const SNAPSHOT_MS = 30 * 60 * 1000;
@@ -79,6 +89,9 @@ interface HealthState {
   lastSbDistPct: number | null;
   lastImbalanceUsd: number | null;
   lastImbalanceAlert: string | null;
+  lastTraderAction: string | null;
+  lastTraderError: string | null;
+  traderLive: boolean;
   lastError: string | null;
   ticks: number;
   alerts: number;
@@ -103,6 +116,9 @@ const health: HealthState = {
   lastSbDistPct: null,
   lastImbalanceUsd: null,
   lastImbalanceAlert: null,
+  lastTraderAction: null,
+  lastTraderError: null,
+  traderLive: false,
   lastError: null,
   ticks: 0,
   alerts: 0,
@@ -114,6 +130,7 @@ const armed = freshArmed();
 const oaiLiqArmed = freshLiqArmed();
 const sbLiqArmed = freshLiqArmed();
 const imbalanceArmed = { current: true };
+const trader = emptyTrader();
 let prevSpread: number | null = null;
 let lastSentId: AlertLevel["id"] | null = null;
 let lastConvergeAt = 0;
@@ -266,7 +283,8 @@ async function tickLiq(): Promise<void> {
 }
 
 async function tick(): Promise<void> {
-  const { oai, sbJpy, usdJpy, sbUsd } = await fetchLiveMids();
+  const mids = await fetchLiveMids();
+  const { oai, sbJpy, usdJpy, sbUsd } = mids;
   const spread = listingSpreadPp(oai, sbUsd, oaiBase, sbBase);
   if (spread == null) throw new Error("spread null");
 
@@ -317,6 +335,17 @@ async function tick(): Promise<void> {
   } catch (err) {
     console.warn("[liq] tick failed", err instanceof Error ? err.message : err);
   }
+  if (!once) {
+    try {
+      await runTraderTick(trader, mids, oaiBase, sbBase);
+      health.lastTraderAction = trader.lastAction;
+      health.lastTraderError = trader.lastError;
+      health.traderLive = traderLive();
+    } catch (err) {
+      health.lastTraderError = err instanceof Error ? err.message : String(err);
+      console.warn("[trader] tick failed", health.lastTraderError);
+    }
+  }
 }
 
 function startHealthServer(): void {
@@ -350,6 +379,37 @@ async function main(): Promise<void> {
   }
 
   startHealthServer();
+
+  if (tradingEnabled()) {
+    const pub = process.env.QFEX_PUBLIC_KEY;
+    const sec = process.env.QFEX_SECRET_KEY;
+    try {
+      if (pub && sec) {
+        trader.qfex = new QfexTradeClient(pub, sec);
+        await trader.qfex.connect();
+        console.log("[trader] QFEX trade WS connected");
+      } else {
+        console.warn("[trader] QFEX keys missing — orders disabled");
+      }
+      if (process.env.HL_PRIVATE_KEY?.startsWith("0x")) {
+        trader.hl = await createHlExecFromEnv();
+        const asset = await resolveIoAsset();
+        console.log(
+          `[trader] HL asset ${asset.assetId} szDecimals=${asset.szDecimals}`,
+        );
+        await ensureHlLeverage(trader.hl);
+      } else {
+        console.warn("[trader] HL_PRIVATE_KEY missing — orders disabled");
+      }
+    } catch (err) {
+      console.warn(
+        "[trader] init failed",
+        err instanceof Error ? err.message : err,
+      );
+    }
+    health.traderLive = traderLive();
+  }
+
   await tick();
   await telegramSend(
     telegramChatId(),
@@ -378,6 +438,11 @@ async function main(): Promise<void> {
         : "Notional gap n/a",
     ].join("\n"),
   );
+  try {
+    await sendTraderStarted(traderLive(), process.env.TRADER_DRY_RUN === "true");
+  } catch (err) {
+    console.warn("[trader] startup telegram failed", err);
+  }
 
   while (true) {
     await new Promise((r) => setTimeout(r, pollMs()));

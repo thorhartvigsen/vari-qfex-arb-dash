@@ -72,18 +72,11 @@ export function crossedLiqLevels(
   return hits;
 }
 
-/** USD notional of a leg. Null if JPY mark was not converted via USDJPY. */
+/** Account USD notional. QFEX JPY names PnL 1:1 into USDC, so use native JPY mark. */
 export function notionalUsd(leg: LiqLeg | null): number | null {
   if (!leg) return 0;
-  const px = leg.markUsd > 0 ? leg.markUsd : leg.mark;
+  const px = leg.quote === "JPY" ? leg.mark : (leg.markUsd > 0 ? leg.markUsd : leg.mark);
   if (!(px > 0) || !Number.isFinite(leg.size)) return null;
-  if (
-    leg.quote === "JPY" &&
-    leg.mark > 0 &&
-    Math.abs(leg.markUsd / leg.mark - 1) < 0.05
-  ) {
-    return null;
-  }
   const n = Math.abs(leg.size) * px;
   return Number.isFinite(n) ? n : null;
 }

@@ -19,6 +19,53 @@ export const DEFAULT_BOT_TOKEN =
 export const DEFAULT_CHAT_ID = "-5462179063";
 /** Risk chat — liquidation distance alerts. */
 export const DEFAULT_LIQ_CHAT_ID = "-5325885280";
+/** Orders chat — fills, signal vs executed spread, incomplete legs. */
+export const DEFAULT_ORDERS_CHAT_ID = "-5344711654";
+
+export const OAI_DEX = "io";
+export const MID_PP = CONVERGE_PP;
+export const MAX_LEV = 3;
+/** Isolated cap on Entropy OAI (venue max is 6). */
+export const OAI_ISOLATED_LEV = 6;
+export const OAI_SIZE_DECIMALS = 3;
+export const OAI_PRICE_DECIMALS = 1;
+export const SB_SIZE_DECIMALS = 4;
+export const SB_PRICE_DECIMALS = 1;
+/** IOC vs touch: first clip 50 bps, retry 50 bps, then 100 bps. */
+export const HL_SLIPPAGE_SCHEDULE_BPS = [50, 50, 100] as const;
+export const MIN_CLIP_USD = 400;
+export const TRADE_COOLDOWN_MS = 4_000;
+export const RETRY_COOLDOWN_MS = 1_500;
+
+/**
+ * Target leverage vs |listing-spread − 8 pp|.
+ * 10 pp away is −2 / +18 (the old alert bands) — not 10 bps.
+ */
+export const LEV_TIERS = [
+  { distPp: 2, lev: 0.3 },
+  { distPp: 3, lev: 0.6 },
+  { distPp: 4.5, lev: 1 },
+  { distPp: 6, lev: 1.5 },
+  { distPp: 10, lev: 2 },
+  { distPp: 14, lev: 2.5 },
+  { distPp: 18, lev: 3 },
+] as const;
+
+/**
+ * Take-profit caps vs |listing-spread − 8 pp| (tighter than scale-in).
+ * At 10% from mid, max keep is 2.5×; inside 1% of mid, 0.3×; at mid, flat.
+ */
+export const EXIT_TIERS = [
+  { distPp: 0, lev: 0 },
+  { distPp: 1, lev: 0.3 },
+  { distPp: 2, lev: 0.6 },
+  { distPp: 3.5, lev: 1 },
+  { distPp: 5, lev: 1.5 },
+  { distPp: 8, lev: 2 },
+  { distPp: 10, lev: 2.5 },
+] as const;
+
+export const LEV_HOLD_EPS = 0.04;
 
 export function envString(name: string, fallback = ""): string {
   return (process.env[name] ?? fallback).trim();
@@ -39,6 +86,32 @@ export function telegramChatId(): string {
 
 export function telegramLiqChatId(): string {
   return envString("TELEGRAM_CHAT_LIQ", DEFAULT_LIQ_CHAT_ID);
+}
+
+export function telegramOrdersChatId(): string {
+  return envString("TELEGRAM_CHAT_ORDERS", DEFAULT_ORDERS_CHAT_ID);
+}
+
+export function tradingEnabled(): boolean {
+  return envString("TRADING_ENABLED", "true") !== "false";
+}
+
+export function traderDryRun(): boolean {
+  return envString("TRADER_DRY_RUN", "false") === "true";
+}
+
+export function traderLive(): boolean {
+  return (
+    tradingEnabled() &&
+    !traderDryRun() &&
+    Boolean(envString("HL_PRIVATE_KEY")) &&
+    Boolean(envString("QFEX_PUBLIC_KEY")) &&
+    Boolean(envString("QFEX_SECRET_KEY"))
+  );
+}
+
+export function minClipUsd(): number {
+  return envNumber("MIN_CLIP_USD", MIN_CLIP_USD);
 }
 
 export function pollMs(): number {

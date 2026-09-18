@@ -2,7 +2,7 @@
   "name": "oai-softbank-alerts",
   "version": "0.1.0",
   "private": true,
-  "description": "Telegram alerts when Entropy OAI vs QFEX SoftBank (JPY→USD) listing-relative spread hits +18 / +8 / -2",
+  "description": "Telegram alerts + live OAI/SoftBank trader (Entropy vs QFEX)",
   "type": "module",
   "scripts": {
     "start": "tsx src/index.ts",
@@ -13,11 +13,15 @@
     "node": ">=22"
   },
   "dependencies": {
+    "@nktkas/hyperliquid": "^0.33.3",
     "dotenv": "^17.4.2",
     "tsx": "^4.23.5",
-    "typescript": "^5.8.3"
+    "typescript": "^5.8.3",
+    "viem": "^2.56.8",
+    "ws": "^8.21.3"
   },
   "devDependencies": {
-    "@types/node": "^22.15.21"
+    "@types/node": "^22.15.21",
+    "@types/ws": "^8.18.1"
   }
 }

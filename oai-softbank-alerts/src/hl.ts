@@ -82,22 +82,80 @@ export async function fetchQfexMid(symbol: string): Promise<number> {
   return mid;
 }
 
+export interface BookLevel {
+  price: number;
+  size: number;
+}
+
+function parseHlLevels(levels: HlLevel[] | undefined): BookLevel[] {
+  const out: BookLevel[] = [];
+  for (const row of levels ?? []) {
+    const price = Number(row.px);
+    const size = Number(row.sz);
+    if (price > 0 && size > 0) out.push({ price, size });
+  }
+  return out;
+}
+
+function parseQfexLevels(
+  levels: Array<[string | number, string | number]> | undefined,
+): BookLevel[] {
+  const out: BookLevel[] = [];
+  for (const row of levels ?? []) {
+    const price = Number(row[0]);
+    const size = Number(row[1]);
+    if (price > 0 && size > 0) out.push({ price, size });
+  }
+  return out;
+}
+
 export interface LiveMids {
   oai: number;
   sbJpy: number;
   usdJpy: number;
   sbUsd: number;
+  oaiBids: BookLevel[];
+  oaiAsks: BookLevel[];
+  sbBids: BookLevel[];
+  sbAsks: BookLevel[];
 }
 
 export async function fetchLiveMids(): Promise<LiveMids> {
-  const [oai, sbJpy, usdJpy] = await Promise.all([
-    fetchHlMid(OAI_COIN),
-    fetchQfexMid(SB_SYMBOL),
+  const [oaiBook, sbBook, usdJpy] = await Promise.all([
+    postInfo<HlBook>({ type: "l2Book", coin: OAI_COIN }),
+    fetch(`${QFEX_API}/md/orderbook/${encodeURIComponent(SB_SYMBOL)}`, {
+      headers: { "User-Agent": "oai-softbank-alerts/0.1" },
+      signal: AbortSignal.timeout(15_000),
+    }).then(async (response) => {
+      const text = await response.text();
+      if (!response.ok) {
+        throw new Error(`QFEX ${response.status}: ${text.slice(0, 160)}`);
+      }
+      return JSON.parse(text) as QfexBook;
+    }),
     fetchHlMid(JPY_COIN),
   ]);
+
+  const oaiBids = parseHlLevels(oaiBook.levels?.[0]);
+  const oaiAsks = parseHlLevels(oaiBook.levels?.[1]);
+  const sbBids = parseQfexLevels(sbBook.bids);
+  const sbAsks = parseQfexLevels(sbBook.asks);
+  const oai = bookMid(oaiBids[0]?.price ?? null, oaiAsks[0]?.price ?? null);
+  const sbJpy = bookMid(sbBids[0]?.price ?? null, sbAsks[0]?.price ?? null);
+  if (oai == null) throw new Error("empty book io:OAI");
+  if (sbJpy == null) throw new Error("empty QFEX book SOFTBANK-JPY");
   const sbUsd = jpyToUsd(sbJpy, usdJpy);
   if (sbUsd == null) throw new Error("JPY→USD convert failed");
-  return { oai, sbJpy, usdJpy, sbUsd };
+  return {
+    oai,
+    sbJpy,
+    usdJpy,
+    sbUsd,
+    oaiBids,
+    oaiAsks,
+    sbBids,
+    sbAsks,
+  };
 }
 
 export async function fetchListingBases(): Promise<{
