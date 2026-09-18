@@ -47,7 +47,7 @@ import { createHlExecFromEnv, resolveIoAsset } from "./trader/hlExec.ts";
 import { QfexTradeClient } from "./trader/qfexExec.ts";
 
 const once = process.argv.includes("--once");
-const SNAPSHOT_MS = 30 * 60 * 1000;
+const SNAPSHOT_MS = 3 * 60 * 1000;
 let lastPnlPing = 0;
 
 async function pingPnlSnapshot(): Promise<void> {

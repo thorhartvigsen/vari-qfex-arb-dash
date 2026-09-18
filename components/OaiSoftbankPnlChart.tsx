@@ -244,12 +244,12 @@ export default function OaiSoftbankPnlChart({
         </div>
       )}
       <p className="text-xs" style={{ color: "var(--arb-text)", opacity: 0.7 }}>
-        Combined QFEX + Hyperliquid USDC · snapshot every 1 min
+        Combined QFEX + Hyperliquid USDC · snapshot every 3 min
         {series === "pnl"
           ? ` · net P&L vs $${START_COLLATERAL.toLocaleString("en-US")} deposit`
           : " · total account value"}
         {" · "}
-        Sharpe annualized from 1-minute returns, rf = 0
+        Sharpe annualized from 3-minute returns, rf = 0
         {persist === "ephemeral"
           ? "  ·  history is not persisting (needs Vercel Blob)"
           : persist === "blob"

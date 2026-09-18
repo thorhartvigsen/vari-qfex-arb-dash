@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import type { OaiSbPnlPayload } from "@/lib/pnlTypes";
 
-const POLL_MS = 60_000;
+const POLL_MS = 180_000;
 
 export function useOaiSoftbankPnl(): {
   data: OaiSbPnlPayload | null;

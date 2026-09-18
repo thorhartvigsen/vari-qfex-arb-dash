@@ -3,12 +3,13 @@ import { promises as fs } from "fs";
 import path from "path";
 import { get, head, list, put } from "@vercel/blob";
 import type { PnlPersist, PnlPoint } from "@/lib/pnlTypes";
+import { START_COLLATERAL } from "@/lib/pnlTypes";
 
 export type { PnlPoint };
 
 export const PNL_BLOB_PATH = "oai-softbank/pnl.json";
-export const SNAPSHOT_MS = 60 * 1000;
-export const SNAPSHOT_DEDUP_MS = 45 * 1000;
+export const SNAPSHOT_MS = 3 * 60 * 1000;
+export const SNAPSHOT_DEDUP_MS = 2.5 * 60 * 1000;
 export const MAX_PNL_POINTS = 20_000;
 
 export interface PnlStore {
@@ -47,6 +48,21 @@ function localPath(): string {
 
 function emptyStore(): PnlStore {
   return { updatedAt: new Date(0).toISOString(), points: [] };
+}
+
+/** Deposit print so the series does not start at live equity. */
+export const PNL_GENESIS_MS = Date.parse("2026-09-17T00:00:00.000Z");
+export const PNL_GENESIS: PnlPoint = {
+  time: PNL_GENESIS_MS,
+  qfex: START_COLLATERAL / 2,
+  hl: START_COLLATERAL / 2,
+  total: START_COLLATERAL,
+};
+
+function needsGenesis(points: PnlPoint[]): boolean {
+  const first = points[0];
+  if (!first) return true;
+  return first.time > PNL_GENESIS_MS + 60_000;
 }
 
 function parseStore(raw: string): PnlStore {
@@ -166,8 +182,18 @@ async function writeBlob(store: PnlStore): Promise<void> {
 export async function readPnlStore(): Promise<PnlStore> {
   const persisted = blobEnabled() ? await readBlob() : await readLocal();
   const merged = mergeStores(memoryStore, persisted);
-  memoryStore = merged;
-  return merged;
+  if (!needsGenesis(merged.points)) {
+    memoryStore = merged;
+    return merged;
+  }
+  const seeded: PnlStore = {
+    updatedAt: new Date().toISOString(),
+    points: mergePoints([PNL_GENESIS], merged.points),
+  };
+  memoryStore = seeded;
+  if (blobEnabled()) await writeBlob(seeded);
+  else await writeLocal(seeded);
+  return seeded;
 }
 
 export async function writePnlStore(store: PnlStore): Promise<void> {
@@ -178,7 +204,7 @@ export async function writePnlStore(store: PnlStore): Promise<void> {
     return;
   }
   if (isServerless()) {
-    console.warn("[pnl] no Vercel Blob store — 1m snapshots will not persist");
+    console.warn("[pnl] no Vercel Blob store — 3m snapshots will not persist");
   }
   await writeLocal(merged);
 }

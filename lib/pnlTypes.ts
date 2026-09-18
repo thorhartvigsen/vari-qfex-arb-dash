@@ -24,7 +24,7 @@ export interface OaiSbPnlPayload {
 
 export type PnlPersist = "blob" | "local" | "ephemeral";
 
-const PERIODS_PER_YEAR = 365.25 * 24 * 60; // 1-minute bars
+const PERIODS_PER_YEAR = 365.25 * 24 * 20; // 3-minute bars
 
 export function pnlStats(
   points: PnlPoint[],

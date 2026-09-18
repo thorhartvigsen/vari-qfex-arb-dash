@@ -251,7 +251,7 @@ export default function OaiSoftbankPage() {
               Collateral P&amp;L
             </h2>
             <p className="text-sm" style={{ color: "var(--arb-text)", opacity: 0.8 }}>
-              Combined QFEX + Hyperliquid USDC · 1-minute snapshots
+              Combined QFEX + Hyperliquid USDC · 3-minute snapshots
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
