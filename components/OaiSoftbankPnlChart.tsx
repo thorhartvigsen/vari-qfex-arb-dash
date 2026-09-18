@@ -5,6 +5,7 @@ import {
   CartesianGrid,
   Line,
   LineChart,
+  ReferenceLine,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -15,12 +16,15 @@ import { START_COLLATERAL, pnlStats } from "@/lib/pnlTypes";
 import type { PnlPoint } from "@/lib/pnlTypes";
 import { THEME } from "@/lib/types";
 
+export type PnlSeries = "total" | "pnl";
+
 interface OaiSoftbankPnlChartProps {
   data: PnlPoint[];
   live?: PnlPoint | null;
   loading?: boolean;
   error?: string | null;
   persist?: "blob" | "local" | "ephemeral" | null;
+  series: PnlSeries;
 }
 
 function formatPnlUsd(value: number): string {
@@ -30,23 +34,23 @@ function formatPnlUsd(value: number): string {
   return abs;
 }
 
-function yDomain(data: PnlPoint[]): [number, number] {
+function yDomain(values: number[]): [number, number] {
   let min = Infinity;
   let max = -Infinity;
-  for (const point of data) {
-    for (const value of [point.total, point.qfex, point.hl]) {
-      if (!Number.isFinite(value)) continue;
-      min = Math.min(min, value);
-      max = Math.max(max, value);
-    }
+  for (const value of values) {
+    if (!Number.isFinite(value)) continue;
+    min = Math.min(min, value);
+    max = Math.max(max, value);
   }
   if (!Number.isFinite(min) || !Number.isFinite(max)) return [0, 1];
   if (min === max) {
-    const pad = Math.max(Math.abs(min) * 0.04, 100);
+    const pad = Math.max(Math.abs(min) * 0.04, 50);
     return [min - pad, max + pad];
   }
-  const pad = Math.max((max - min) * 0.08, 50);
-  return [min - pad, max + pad];
+  const pad = Math.max((max - min) * 0.08, 40);
+  if (min > 0 && max > 0) return [min - pad, max + pad];
+  if (min < 0 && max < 0) return [min - pad, max + pad];
+  return [Math.min(min - pad, 0), Math.max(max + pad, 0)];
 }
 
 function Stat({
@@ -75,12 +79,12 @@ function Stat({
       }}
     >
       <p
-        className="text-[10px] font-normal uppercase tracking-wider"
+        className="text-[10px] font-medium uppercase tracking-wider"
         style={{ color: "var(--arb-text)", opacity: 0.75 }}
       >
         {label}
       </p>
-      <p className="font-sans text-sm font-light leading-tight" style={{ color }}>
+      <p className="font-sans text-sm font-medium leading-tight" style={{ color }}>
         {value}
       </p>
     </div>
@@ -93,6 +97,7 @@ export default function OaiSoftbankPnlChart({
   loading,
   error,
   persist,
+  series,
 }: OaiSoftbankPnlChartProps) {
   const chartData = useMemo(() => {
     const rows = [...data];
@@ -103,12 +108,27 @@ export default function OaiSoftbankPnlChart({
       if (lastMinute === liveMinute) rows[rows.length - 1] = live;
       else rows.push(live);
     }
-    return rows;
-  }, [data, live]);
+    return rows.map((row) => ({
+      time: row.time,
+      value: series === "pnl" ? row.total - START_COLLATERAL : row.total,
+    }));
+  }, [data, live, series]);
 
-  const domain = useMemo(() => yDomain(chartData), [chartData]);
-  const windowStats = useMemo(() => pnlStats(chartData), [chartData]);
-  const stats = windowStats;
+  const domain = useMemo(
+    () => yDomain(chartData.map((row) => row.value)),
+    [chartData],
+  );
+  const stats = useMemo(() => {
+    const rows = [...data];
+    if (live && Number.isFinite(live.total)) {
+      const last = rows[rows.length - 1];
+      const liveMinute = Math.round(live.time / 60_000);
+      const lastMinute = last ? Math.round(last.time / 60_000) : null;
+      if (lastMinute === liveMinute) rows[rows.length - 1] = live;
+      else rows.push(live);
+    }
+    return pnlStats(rows);
+  }, [data, live]);
 
   if (loading) {
     return (
@@ -177,12 +197,15 @@ export default function OaiSoftbankPnlChart({
               />
               <YAxis
                 domain={domain}
-                tickFormatter={(v) =>
-                  Number(v).toLocaleString(undefined, { maximumFractionDigits: 0 })
-                }
+                tickFormatter={(v) => {
+                  const n = Number(v);
+                  if (!Number.isFinite(n)) return "";
+                  if (series === "pnl") return formatPnlUsd(n);
+                  return formatUsd(n, 0);
+                }}
                 stroke={THEME.muted}
                 tick={{ fontSize: 10, fill: THEME.muted }}
-                width={64}
+                width={72}
               />
               <Tooltip
                 contentStyle={{
@@ -192,32 +215,27 @@ export default function OaiSoftbankPnlChart({
                   fontSize: 12,
                 }}
                 labelFormatter={(label) => formatChartTime(Number(label))}
-                formatter={(value, name) => [
-                  formatUsd(typeof value === "number" ? value : Number(value), 0),
-                  name === "total" ? "Total" : name === "qfex" ? "QFEX" : "Hyperliquid",
-                ]}
+                formatter={(value) => {
+                  const n = typeof value === "number" ? value : Number(value);
+                  return [
+                    series === "pnl" ? formatPnlUsd(n) : formatUsd(n, 0),
+                    series === "pnl" ? "Net P&L" : "Total",
+                  ];
+                }}
               />
+              {series === "pnl" ? (
+                <ReferenceLine
+                  y={0}
+                  stroke={THEME.muted}
+                  strokeDasharray="4 4"
+                  strokeOpacity={0.45}
+                />
+              ) : null}
               <Line
                 type="monotone"
-                dataKey="total"
+                dataKey="value"
                 stroke={THEME.light}
                 strokeWidth={2}
-                dot={false}
-                isAnimationActive={false}
-              />
-              <Line
-                type="monotone"
-                dataKey="qfex"
-                stroke={THEME.qfex}
-                strokeWidth={1.25}
-                dot={false}
-                isAnimationActive={false}
-              />
-              <Line
-                type="monotone"
-                dataKey="hl"
-                stroke={THEME.variational}
-                strokeWidth={1.25}
                 dot={false}
                 isAnimationActive={false}
               />
@@ -226,9 +244,12 @@ export default function OaiSoftbankPnlChart({
         </div>
       )}
       <p className="text-xs" style={{ color: "var(--arb-text)", opacity: 0.7 }}>
-        QFEX equity + Hyperliquid USDC (incl. Entropy margin) · snapshot every 1 min ·
-        P&L vs {START_COLLATERAL.toLocaleString()} start · Sharpe annualized from
-        1-minute returns, rf = 0
+        Combined QFEX + Hyperliquid USDC · snapshot every 1 min
+        {series === "pnl"
+          ? ` · net P&L vs $${START_COLLATERAL.toLocaleString("en-US")} deposit`
+          : " · total account value"}
+        {" · "}
+        Sharpe annualized from 1-minute returns, rf = 0
         {persist === "ephemeral"
           ? "  ·  history is not persisting (needs Vercel Blob)"
           : persist === "blob"

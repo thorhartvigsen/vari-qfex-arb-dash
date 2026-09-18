@@ -5,7 +5,9 @@ import OaiSoftbankCard from "@/components/OaiSoftbankCard";
 import OaiSoftbankChart from "@/components/OaiSoftbankChart";
 import OaiSoftbankFillsLog from "@/components/OaiSoftbankFillsLog";
 import OaiSoftbankFundingChart from "@/components/OaiSoftbankFundingChart";
-import OaiSoftbankPnlChart from "@/components/OaiSoftbankPnlChart";
+import OaiSoftbankPnlChart, {
+  type PnlSeries,
+} from "@/components/OaiSoftbankPnlChart";
 import SiteNav from "@/components/SiteNav";
 import ThemeToggle from "@/components/ThemeToggle";
 import ToggleGroup from "@/components/ToggleGroup";
@@ -38,8 +40,16 @@ const RANGE_LABELS: Record<OaiSbRange, string> = {
   all: "since listing",
 };
 
+const PNL_SERIES = ["total", "pnl"] as const;
+const PNL_SERIES_LABELS: Record<PnlSeries, string> = {
+  total: "Total value",
+  pnl: "Net P&L",
+};
+
 export default function OaiSoftbankPage() {
   const [spreadRange, setSpreadRange] = useState<OaiSbRange>("7d");
+  const [pnlRange, setPnlRange] = useState<OaiSbRange>("7d");
+  const [pnlSeries, setPnlSeries] = useState<PnlSeries>("total");
   const { data, error: posError } = useOaiSoftbankPositions();
   const { data: fills, error: fillsError } = useOaiSoftbankFills();
   const { book: oaiBook, connected: oaiConnected, error: oaiError } = useHlBook(OAI_COIN);
@@ -94,11 +104,11 @@ export default function OaiSoftbankPage() {
 
   const pnlPoints = useMemo(() => {
     const points = pnl?.points ?? [];
-    const windowMs = SPREAD_RANGE_MS[spreadRange];
+    const windowMs = SPREAD_RANGE_MS[pnlRange];
     if (windowMs == null) return points;
     const cutoff = Date.now() - windowMs;
     return points.filter((point) => point.time >= cutoff);
-  }, [pnl?.points, spreadRange]);
+  }, [pnl?.points, pnlRange]);
 
   const errors = [posError, oaiError, sbError, jpyError].filter(Boolean);
 
@@ -227,16 +237,32 @@ export default function OaiSoftbankPage() {
       </section>
 
       <section className="space-y-3">
-        <div>
-          <h2
-            className="text-lg font-semibold"
-            style={{ color: "var(--arb-light)" }}
-          >
-            Collateral P&amp;L
-          </h2>
-          <p className="text-sm" style={{ color: "var(--arb-text)", opacity: 0.8 }}>
-            QFEX account equity + Hyperliquid USDC · 1-minute snapshots · same window as the spread
-          </p>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2
+              className="text-lg font-semibold"
+              style={{ color: "var(--arb-light)" }}
+            >
+              Collateral P&amp;L
+            </h2>
+            <p className="text-sm" style={{ color: "var(--arb-text)", opacity: 0.8 }}>
+              Combined QFEX + Hyperliquid USDC · 1-minute snapshots
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <ToggleGroup
+              options={PNL_SERIES}
+              labels={PNL_SERIES_LABELS}
+              value={pnlSeries}
+              onChange={setPnlSeries}
+            />
+            <ToggleGroup
+              options={SPREAD_RANGES}
+              labels={RANGE_LABELS}
+              value={pnlRange}
+              onChange={setPnlRange}
+            />
+          </div>
         </div>
         <OaiSoftbankPnlChart
           data={pnlPoints}
@@ -244,6 +270,7 @@ export default function OaiSoftbankPage() {
           loading={pnlLoading}
           error={pnlError}
           persist={pnl?.persist ?? null}
+          series={pnlSeries}
         />
       </section>
     </main>
