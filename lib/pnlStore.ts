@@ -105,7 +105,7 @@ async function writeLocal(store: PnlStore): Promise<void> {
 
 async function readBlobBody(pathnameOrUrl: string): Promise<PnlStore | null> {
   const result = await get(pathnameOrUrl, {
-    access: "private",
+    access: "public",
     useCache: false,
   });
   if (!result || result.statusCode !== 200 || !result.stream) return null;
@@ -155,10 +155,11 @@ async function readBlob(): Promise<PnlStore> {
 
 async function writeBlob(store: PnlStore): Promise<void> {
   await put(PNL_BLOB_PATH, JSON.stringify(store), {
-    access: "private",
+    access: "public",
     addRandomSuffix: false,
     allowOverwrite: true,
     contentType: "application/json",
+    cacheControlMaxAge: 60,
   });
 }
 
