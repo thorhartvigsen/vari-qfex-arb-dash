@@ -114,13 +114,7 @@ export async function fetchOaiSoftbankPnl(opts?: {
     stored = store.points.length > before;
   }
 
-  const points = [...store.points];
-  const newest = points[points.length - 1];
-  if (!newest || Math.abs(live.time - newest.time) > 15_000) {
-    points.push(live);
-  } else {
-    points[points.length - 1] = live;
-  }
+  const points = store.points;
 
   return {
     points,

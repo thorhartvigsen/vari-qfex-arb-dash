@@ -235,7 +235,7 @@ export default function OaiSoftbankPage() {
             Collateral P&amp;L
           </h2>
           <p className="text-sm" style={{ color: "var(--arb-text)", opacity: 0.8 }}>
-            QFEX account equity + Hyperliquid USDC · 30-minute snapshots · same window as the spread
+            QFEX account equity + Hyperliquid USDC · 1-minute snapshots · same window as the spread
           </p>
         </div>
         <OaiSoftbankPnlChart

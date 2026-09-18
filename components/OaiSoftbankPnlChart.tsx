@@ -98,8 +98,10 @@ export default function OaiSoftbankPnlChart({
     const rows = [...data];
     if (live && Number.isFinite(live.total)) {
       const last = rows[rows.length - 1];
-      if (!last || Math.abs(live.time - last.time) > 5_000) rows.push(live);
-      else rows[rows.length - 1] = live;
+      const liveMinute = Math.round(live.time / 60_000);
+      const lastMinute = last ? Math.round(last.time / 60_000) : null;
+      if (lastMinute === liveMinute) rows[rows.length - 1] = live;
+      else rows.push(live);
     }
     return rows;
   }, [data, live]);
@@ -224,13 +226,13 @@ export default function OaiSoftbankPnlChart({
         </div>
       )}
       <p className="text-xs" style={{ color: "var(--arb-text)", opacity: 0.7 }}>
-        QFEX equity + Hyperliquid USDC (incl. Entropy margin) · snapshot every 30 min ·
+        QFEX equity + Hyperliquid USDC (incl. Entropy margin) · snapshot every 1 min ·
         P&L vs {START_COLLATERAL.toLocaleString()} start · Sharpe annualized from
-        30-minute returns, rf = 0
+        1-minute returns, rf = 0
         {persist === "ephemeral"
           ? "  ·  history is not persisting (needs Vercel Blob)"
           : persist === "blob"
-            ? `  ·  ${chartData.length} stored prints`
+            ? `  ·  ${data.length} stored prints`
             : ""}
       </p>
     </div>

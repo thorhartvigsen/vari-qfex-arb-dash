@@ -7,8 +7,8 @@ import type { PnlPersist, PnlPoint } from "@/lib/pnlTypes";
 export type { PnlPoint };
 
 export const PNL_BLOB_PATH = "oai-softbank/pnl.json";
-export const SNAPSHOT_MS = 30 * 60 * 1000;
-export const SNAPSHOT_DEDUP_MS = 25 * 60 * 1000;
+export const SNAPSHOT_MS = 60 * 1000;
+export const SNAPSHOT_DEDUP_MS = 45 * 1000;
 export const MAX_PNL_POINTS = 20_000;
 
 export interface PnlStore {
@@ -178,7 +178,7 @@ export async function writePnlStore(store: PnlStore): Promise<void> {
     return;
   }
   if (isServerless()) {
-    console.warn("[pnl] no Vercel Blob store — 30m snapshots will not persist");
+    console.warn("[pnl] no Vercel Blob store — 1m snapshots will not persist");
   }
   await writeLocal(merged);
 }
