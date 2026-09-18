@@ -80,6 +80,17 @@ export function liqHysteresisPct(): number {
   return Number.isFinite(raw) && raw >= 0 ? raw : 2;
 }
 
+/** USD notional gap between OAI and SoftBank that fires a risk-chat alert. */
+export function imbalanceUsdThreshold(): number {
+  return envNumber("IMBALANCE_USD", 10_000);
+}
+
+/** Re-arm the imbalance alert after the gap falls this far below the threshold. */
+export function imbalanceHysteresisUsd(): number {
+  const raw = Number(process.env.IMBALANCE_HYSTERESIS_USD);
+  return Number.isFinite(raw) && raw >= 0 ? raw : 2_000;
+}
+
 export function healthPort(): number {
   return envNumber("PORT", 8080);
 }

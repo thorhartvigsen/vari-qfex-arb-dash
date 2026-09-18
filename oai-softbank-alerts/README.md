@@ -16,6 +16,8 @@ Each spread level fires once per visit, then re-arms after the print moves **0.7
 
 Liquidation distance (chat `-5325885280`) fires when **either venue** is **15%**, then **10%**, then **5%** of price from its liquidation. Re-arms after the buffer recovers 2 pp above that level. Checked every **5 seconds**. QFEX SoftBank liq is in JPY (QFEX PnLs yen 1:1 into USDC).
 
+The same risk chat also fires when **USD notional** (Entropy OAI vs QFEX SoftBank) differs by **more than $10,000**. Re-arms after the gap falls $2,000 below that ($8,000).
+
 ## Local
 
 ```bash

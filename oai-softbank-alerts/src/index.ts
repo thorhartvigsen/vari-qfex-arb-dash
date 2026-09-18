@@ -11,6 +11,8 @@ import {
   fmtPx,
   healthPort,
   hysteresisPp,
+  imbalanceHysteresisUsd,
+  imbalanceUsdThreshold,
   liqHysteresisPct,
   liqPollMs,
   listingSpreadPp,
@@ -22,11 +24,15 @@ import {
 import { fetchListingBases, fetchLiveMids } from "./hl.ts";
 import { crossedLevels, freshArmed, type AlertLevel } from "./levels.ts";
 import {
+  crossedImbalance,
   crossedLiqLevels,
   fetchLiqSnapshot,
   freshLiqArmed,
+  notionalUsd,
+  venueImbalanceUsd,
   type LiqLeg,
   type LiqLevel,
+  type LiqSnapshot,
 } from "./liq.ts";
 import { esc, telegramSend } from "./telegram.ts";
 
@@ -71,10 +77,13 @@ interface HealthState {
   lastLiqAt: string | null;
   lastOaiDistPct: number | null;
   lastSbDistPct: number | null;
+  lastImbalanceUsd: number | null;
+  lastImbalanceAlert: string | null;
   lastError: string | null;
   ticks: number;
   alerts: number;
   liqAlerts: number;
+  imbalanceAlerts: number;
 }
 
 const health: HealthState = {
@@ -92,15 +101,19 @@ const health: HealthState = {
   lastLiqAt: null,
   lastOaiDistPct: null,
   lastSbDistPct: null,
+  lastImbalanceUsd: null,
+  lastImbalanceAlert: null,
   lastError: null,
   ticks: 0,
   alerts: 0,
   liqAlerts: 0,
+  imbalanceAlerts: 0,
 };
 
 const armed = freshArmed();
 const oaiLiqArmed = freshLiqArmed();
 const sbLiqArmed = freshLiqArmed();
+const imbalanceArmed = { current: true };
 let prevSpread: number | null = null;
 let lastSentId: AlertLevel["id"] | null = null;
 let lastConvergeAt = 0;
@@ -159,6 +172,61 @@ function liqAlertBody(level: LiqLevel, leg: LiqLeg): string {
   ].join("\n");
 }
 
+function fmtUsd(n: number): string {
+  return `$${fmtPx(n, 0)}`;
+}
+
+function formatLegNotional(leg: LiqLeg | null, label: string): string {
+  const n = notionalUsd(leg);
+  if (!leg || n == null) {
+    return `${esc(label)}  flat  ${esc(fmtUsd(0))}`;
+  }
+  return `${esc(leg.label)}  ${esc(leg.side)}  ${esc(fmtPx(Math.abs(leg.size), 2))}  ·  ${esc(fmtUsd(n))}`;
+}
+
+function imbalanceAlertBody(snap: LiqSnapshot, gap: number, threshold: number): string {
+  const oaiN = notionalUsd(snap.oai) ?? 0;
+  const sbN = notionalUsd(snap.softbank) ?? 0;
+  const heavier =
+    oaiN === sbN
+      ? "even"
+      : oaiN > sbN
+        ? "Entropy OAI is larger"
+        : "QFEX SoftBank is larger";
+  return [
+    `⚠️ <b>Notional imbalance &gt; ${esc(fmtUsd(threshold))}</b>`,
+    "",
+    `Gap <b>${esc(fmtUsd(gap))}</b> · ${esc(heavier)}`,
+    "",
+    formatLegNotional(snap.oai, "Entropy OAI"),
+    formatLegNotional(snap.softbank, "QFEX SoftBank"),
+  ].join("\n");
+}
+
+async function emitImbalance(snap: LiqSnapshot): Promise<void> {
+  const threshold = imbalanceUsdThreshold();
+  const gap = venueImbalanceUsd(snap);
+  health.lastImbalanceUsd = gap;
+  const hit = crossedImbalance(
+    gap,
+    imbalanceArmed,
+    threshold,
+    imbalanceHysteresisUsd(),
+  );
+  if (!hit || gap == null) return;
+  const oaiN = notionalUsd(snap.oai) ?? 0;
+  const sbN = notionalUsd(snap.softbank) ?? 0;
+  const summary = `${fmtUsd(gap)} (OAI ${fmtUsd(oaiN)} vs SB ${fmtUsd(sbN)})`;
+  if (once) {
+    console.log(`[imbalance] would alert ${summary}`);
+    return;
+  }
+  await telegramSend(telegramLiqChatId(), imbalanceAlertBody(snap, gap, threshold));
+  health.lastImbalanceAlert = summary;
+  health.imbalanceAlerts += 1;
+  console.log(`[imbalance] ${summary}`);
+}
+
 async function emitLiqHits(leg: LiqLeg | null, armed: ReturnType<typeof freshLiqArmed>): Promise<void> {
   const hits = crossedLiqLevels(
     leg?.distPct ?? null,
@@ -189,9 +257,10 @@ async function tickLiq(): Promise<void> {
   health.lastSbDistPct = snap.softbank?.distPct ?? null;
   await emitLiqHits(snap.oai, oaiLiqArmed);
   await emitLiqHits(snap.softbank, sbLiqArmed);
+  await emitImbalance(snap);
   if (once || health.ticks % 15 === 1) {
     console.log(
-      `[liq] oai=${snap.oai?.distPct?.toFixed(1) ?? "n/a"}%  sb=${snap.softbank?.distPct?.toFixed(1) ?? "n/a"}%  alerts=${health.liqAlerts}`,
+      `[liq] oai=${snap.oai?.distPct?.toFixed(1) ?? "n/a"}%  sb=${snap.softbank?.distPct?.toFixed(1) ?? "n/a"}%  imb=${health.lastImbalanceUsd == null ? "n/a" : `$${health.lastImbalanceUsd.toFixed(0)}`}  alerts=${health.liqAlerts} imbAlerts=${health.imbalanceAlerts}`,
     );
   }
 }
@@ -296,6 +365,7 @@ async function main(): Promise<void> {
     [
       "<b>OAI / SoftBank liq watcher up</b>",
       "Alerting when a venue is 15% / 10% / 5% from liquidation",
+      `or notional imbalance exceeds $${imbalanceUsdThreshold().toLocaleString("en-US")}`,
       "Entropy OAI and QFEX SoftBank, separately",
       health.lastOaiDistPct != null
         ? `OAI now ${health.lastOaiDistPct.toFixed(1)}% from liq`
@@ -303,6 +373,9 @@ async function main(): Promise<void> {
       health.lastSbDistPct != null
         ? `SoftBank now ${health.lastSbDistPct.toFixed(1)}% from liq`
         : "SoftBank liq n/a",
+      health.lastImbalanceUsd != null
+        ? `Notional gap now $${health.lastImbalanceUsd.toFixed(0)}`
+        : "Notional gap n/a",
     ].join("\n"),
   );
 

@@ -71,3 +71,51 @@ export function crossedLiqLevels(
   }
   return hits;
 }
+
+/** USD notional of a leg. Null if JPY mark was not converted via USDJPY. */
+export function notionalUsd(leg: LiqLeg | null): number | null {
+  if (!leg) return 0;
+  const px = leg.markUsd > 0 ? leg.markUsd : leg.mark;
+  if (!(px > 0) || !Number.isFinite(leg.size)) return null;
+  if (
+    leg.quote === "JPY" &&
+    leg.mark > 0 &&
+    Math.abs(leg.markUsd / leg.mark - 1) < 0.05
+  ) {
+    return null;
+  }
+  const n = Math.abs(leg.size) * px;
+  return Number.isFinite(n) ? n : null;
+}
+
+export function venueImbalanceUsd(snap: LiqSnapshot): number | null {
+  const oai = notionalUsd(snap.oai);
+  const sb = notionalUsd(snap.softbank);
+  if (oai == null || sb == null) return null;
+  return Math.abs(oai - sb);
+}
+
+/**
+ * Fire once when |OAI − SoftBank| notional reaches `threshold`.
+ * Re-arm after the gap falls `hysteresisUsd` below that level.
+ */
+export function crossedImbalance(
+  gapUsd: number | null,
+  armed: { current: boolean },
+  threshold: number,
+  hysteresisUsd: number,
+): boolean {
+  if (gapUsd == null || !Number.isFinite(gapUsd)) {
+    armed.current = true;
+    return false;
+  }
+  if (!armed.current) {
+    if (gapUsd < threshold - hysteresisUsd) armed.current = true;
+    return false;
+  }
+  if (gapUsd >= threshold) {
+    armed.current = false;
+    return true;
+  }
+  return false;
+}

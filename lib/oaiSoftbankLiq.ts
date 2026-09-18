@@ -209,26 +209,22 @@ export async function fetchOaiSoftbankLiq(): Promise<OaiSbLiqPayload> {
   }
 
   let softbank: LiqLeg | null = null;
-  if (
-    sbRaw &&
-    sbSide !== "flat" &&
-    sbMarkJpy != null &&
-    sbMarkJpy > 0 &&
-    equity != null &&
-    sbMaint != null
-  ) {
-    const equityForSb = equity - mmOther;
-    const liqJpy = estimateLiqPrice({
-      size: sbSize,
-      mark: sbMarkJpy,
-      equity: equityForSb,
-      maintRate: sbMaint,
-    });
-    const onSide =
-      liqJpy != null &&
-      ((sbSize > 0 && liqJpy < sbMarkJpy) ||
-        (sbSize < 0 && liqJpy > sbMarkJpy));
-    const liqKept = onSide ? liqJpy : null;
+  if (sbRaw && sbSide !== "flat" && sbMarkJpy != null && sbMarkJpy > 0) {
+    let liqKept: number | null = null;
+    if (equity != null && sbMaint != null) {
+      const equityForSb = equity - mmOther;
+      const liqJpy = estimateLiqPrice({
+        size: sbSize,
+        mark: sbMarkJpy,
+        equity: equityForSb,
+        maintRate: sbMaint,
+      });
+      const onSide =
+        liqJpy != null &&
+        ((sbSize > 0 && liqJpy < sbMarkJpy) ||
+          (sbSize < 0 && liqJpy > sbMarkJpy));
+      liqKept = onSide ? liqJpy : null;
+    }
     const markUsd =
       fx != null && fx > 0 ? jpyToUsd(sbMarkJpy, fx) : sbMarkJpy;
     const liqUsd =
