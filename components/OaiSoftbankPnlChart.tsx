@@ -68,19 +68,19 @@ function Stat({
           : "var(--arb-light)";
   return (
     <div
-      className="flex flex-1 flex-col gap-1 rounded-md px-3 py-3"
+      className="flex flex-1 flex-col gap-0.5 rounded-md px-2.5 py-2"
       style={{
         backgroundColor: "var(--arb-panel-soft)",
         border: "1px solid var(--arb-border)",
       }}
     >
       <p
-        className="text-xs font-medium uppercase tracking-wide"
-        style={{ color: "var(--arb-light)" }}
+        className="text-[10px] font-normal uppercase tracking-wider"
+        style={{ color: "var(--arb-text)", opacity: 0.75 }}
       >
         {label}
       </p>
-      <p className="font-mono text-xl font-medium leading-none" style={{ color }}>
+      <p className="font-sans text-sm font-light leading-tight" style={{ color }}>
         {value}
       </p>
     </div>
@@ -170,7 +170,7 @@ export default function OaiSoftbankPnlChart({
                 dataKey="time"
                 tickFormatter={(t) => formatChartTime(Number(t))}
                 stroke={THEME.muted}
-                tick={{ fontSize: 11, fill: THEME.muted }}
+                tick={{ fontSize: 10, fill: THEME.muted }}
                 minTickGap={40}
               />
               <YAxis
@@ -179,14 +179,15 @@ export default function OaiSoftbankPnlChart({
                   Number(v).toLocaleString(undefined, { maximumFractionDigits: 0 })
                 }
                 stroke={THEME.muted}
-                tick={{ fontSize: 11, fill: THEME.muted }}
-                width={72}
+                tick={{ fontSize: 10, fill: THEME.muted }}
+                width={64}
               />
               <Tooltip
                 contentStyle={{
                   backgroundColor: "var(--arb-panel)",
                   border: "1px solid var(--arb-border)",
                   color: "var(--arb-light)",
+                  fontSize: 12,
                 }}
                 labelFormatter={(label) => formatChartTime(Number(label))}
                 formatter={(value, name) => [

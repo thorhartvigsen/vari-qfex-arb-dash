@@ -93,10 +93,9 @@ export function formatUsd(
   if (value === null || value === undefined || !Number.isFinite(value)) {
     return "—";
   }
-  return value.toLocaleString(undefined, {
-    style: "currency",
-    currency: "USD",
+  const abs = Math.abs(value).toLocaleString("en-US", {
     minimumFractionDigits: decimals,
     maximumFractionDigits: decimals,
   });
+  return `${value < 0 ? "-" : ""}$${abs}`;
 }
