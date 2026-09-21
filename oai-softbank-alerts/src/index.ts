@@ -20,6 +20,7 @@ import {
   pollMs,
   telegramChatId,
   telegramLiqChatId,
+  traderDryRun,
   traderLive,
   tradingEnabled,
 } from "./config.ts";
@@ -341,6 +342,11 @@ async function tick(): Promise<void> {
       health.lastTraderAction = trader.lastAction;
       health.lastTraderError = trader.lastError;
       health.traderLive = traderLive();
+      if (once || health.ticks % 15 === 1) {
+        console.log(
+          `[trader] live=${traderLive()} dry=${traderDryRun()} hl=${Boolean(trader.hl)} qfex=${Boolean(trader.qfex)} ${trader.lastAction ?? "idle"}`,
+        );
+      }
     } catch (err) {
       health.lastTraderError = err instanceof Error ? err.message : String(err);
       console.warn("[trader] tick failed", health.lastTraderError);

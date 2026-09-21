@@ -22,7 +22,6 @@ import { esc, telegramSend } from "../telegram.ts";
 import type { HlExecClient, HlOrderResult } from "./hlExec.ts";
 import {
   availablePairedUsd,
-  entryMinDistPp,
   entryTouchPx,
   entryTouchSpreadPp,
 } from "./liquidity.ts";
@@ -252,7 +251,7 @@ async function runTraderTickInner(
   let wanted = targetSignedUsd(dir, targetUsd);
   let dOai = clipUsd(wanted.oaiUsd - oaiNow);
   let dSb = clipUsd(wanted.sbUsd - sbNow);
-  const spreadLabel = `mid ${fmtPp(midSpread)} touch ${touchSpread == null ? "n/a" : fmtPp(touchSpread)}`;
+  const spreadLabel = `mid ${fmtPp(midSpread)} touch ${touchSpread == null ? "n/a" : fmtPp(touchSpread)} eq ${fmtUsdAbs(pos.oaiEquity)}/${fmtUsdAbs(pos.sbEquity)}`;
 
   if (plan.action === "hold" || (dOai === 0 && dSb === 0)) {
     rt.lastAction = `hold ${dir} ${plan.currentLev.toFixed(2)}× ${spreadLabel} (entry ${plan.entryLev}× / tp ${plan.exitLev}×)`;
@@ -260,7 +259,6 @@ async function runTraderTickInner(
   }
 
   if (plan.action === "enter" || plan.action === "scale") {
-    const minDist = entryMinDistPp(plan.targetLev);
     const needUsd = Math.max(Math.abs(dOai), Math.abs(dSb));
     const avail = availablePairedUsd({
       dir,
@@ -271,7 +269,7 @@ async function runTraderTickInner(
       usdJpy: mids.usdJpy,
       oaiBase,
       sbBase,
-      minDistPp: minDist,
+      minDistPp: 0,
       maxUsd: needUsd,
     });
     if (avail + 1e-6 < minClipUsd()) {
@@ -304,9 +302,9 @@ async function runTraderTickInner(
   rt.lastAction = `${action} ${dir} ${lev}× ${spreadLabel} ΔOAI ${fmtUsd(dOai)} ΔSB ${fmtUsd(dSb)}`;
 
   if (!traderLive() || !rt.hl || !rt.qfex) {
-    if (traderDryRun()) {
-      console.log(`[trader] dry ${rt.lastAction}`);
-    }
+    console.warn(
+      `[trader] not live — ${rt.lastAction} enabled=${tradingEnabled()} dry=${traderDryRun()} hl=${Boolean(rt.hl)} qfex=${Boolean(rt.qfex)} key=${Boolean(process.env.HL_PRIVATE_KEY)} wallet=${Boolean(process.env.HL_WALLET_ADDRESS)}`,
+    );
     return;
   }
 
