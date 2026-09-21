@@ -232,7 +232,7 @@ export default function OaiSoftbankPage() {
             Execution log
           </h2>
           <p className="text-sm" style={{ color: "var(--arb-text)", opacity: 0.8 }}>
-            Entropy fills and QFEX SoftBank trades from 17 Sep 2026 00:00 UTC · clustered within 5 minutes · listing-relative entry spread in USD
+            Entropy fills and QFEX SoftBank trades from 17 Sep 2026 00:00 UTC · clustered within 5 minutes · listing-relative executed spread in USD
           </p>
         </div>
         <OaiSoftbankFillsLog

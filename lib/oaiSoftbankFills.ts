@@ -35,6 +35,7 @@ export interface OaiSbFill {
 export interface OaiSbExecution {
   time: number;
   kind: OaiSbSignal | "mixed";
+  role: "entry" | "exit" | null;
   spreadPp: number | null;
   oaiPx: number | null;
   sbPx: number | null;
@@ -55,11 +56,22 @@ export interface OaiSbFillsPayload {
   fetchedAt: number;
 }
 
-/** Tape side vs 8%: adding with the spread is entry, covering through 8% is exit. */
+/** Tape side vs 8% is a fallback. Prefer HL close/open dir and inventory. */
 export function fillRole(row: OaiSbExecution): "entry" | "exit" | null {
+  if (row.role) return row.role;
   if (row.spreadPp == null || !Number.isFinite(row.spreadPp)) return null;
   if (row.kind === "short_oai") return row.spreadPp > CONVERGE_PP ? "entry" : "exit";
   if (row.kind === "long_oai") return row.spreadPp < CONVERGE_PP ? "entry" : "exit";
+  return null;
+}
+
+function roleFromHlDir(dir: string): "entry" | "exit" | null {
+  const d = dir.toLowerCase();
+  if (!d) return null;
+  if (d.includes("close") || d.includes("liquidat") || d.includes(" > ")) {
+    return "exit";
+  }
+  if (d.includes("open")) return "entry";
   return null;
 }
 
@@ -258,31 +270,70 @@ function clusterExecutions(
     }
   }
 
-  return groups
-    .map((group) => {
-      const oai = vwap(group.filter((f) => f.coin === OAI_COIN));
-      const sb = vwap(group.filter((f) => f.coin === SB_SYMBOL));
-      let kind: OaiSbExecution["kind"] = "flat";
-      if (oai?.side === "sell" && sb?.side === "buy") kind = "short_oai";
-      else if (oai?.side === "buy" && sb?.side === "sell") kind = "long_oai";
-      else if (oai && sb) kind = "mixed";
-      return {
-        time: group[0].time,
-        kind,
-        spreadPp: listingSpreadPp(oai?.pxUsd, sb?.pxUsd, oaiBase, sbBase),
-        oaiPx: oai?.px ?? null,
-        sbPx: sb?.px ?? null,
-        sbPxUsd: sb?.pxUsd ?? null,
-        oaiSide: oai?.side ?? null,
-        sbSide: sb?.side ?? null,
-        oaiSize: oai?.size ?? 0,
-        sbSize: sb?.size ?? 0,
-        oaiNotional: oai?.notional ?? 0,
-        sbNotional: sb?.notional ?? 0,
-        fillCount: group.length,
-      };
-    })
+  const rows: OaiSbExecution[] = groups.map((group) => {
+    const oaiFills = group.filter((f) => f.coin === OAI_COIN);
+    const oai = vwap(oaiFills);
+    const sb = vwap(group.filter((f) => f.coin === SB_SYMBOL));
+    let kind: OaiSbExecution["kind"] = "flat";
+    if (oai?.side === "sell" && sb?.side === "buy") kind = "short_oai";
+    else if (oai?.side === "buy" && sb?.side === "sell") kind = "long_oai";
+    else if (oai && sb) kind = "mixed";
+    const dirVotes = oaiFills.map((f) => roleFromHlDir(f.dir));
+    const exits = dirVotes.filter((r) => r === "exit").length;
+    const entries = dirVotes.filter((r) => r === "entry").length;
+    let role: OaiSbExecution["role"] = null;
+    if (exits > entries) role = "exit";
+    else if (entries > exits) role = "entry";
+    else {
+      const closed = oaiFills.filter(
+        (f) => f.closedPnl != null && Math.abs(f.closedPnl) > 1e-6,
+      ).length;
+      if (closed > 0 && closed >= oaiFills.length / 2) role = "exit";
+    }
+    return {
+      time: Math.max(...group.map((f) => f.time)),
+      kind,
+      role,
+      spreadPp: listingSpreadPp(oai?.pxUsd, sb?.pxUsd, oaiBase, sbBase),
+      oaiPx: oai?.px ?? null,
+      sbPx: sb?.px ?? null,
+      sbPxUsd: sb?.pxUsd ?? null,
+      oaiSide: oai?.side ?? null,
+      sbSide: sb?.side ?? null,
+      oaiSize: oai?.size ?? 0,
+      sbSize: sb?.size ?? 0,
+      oaiNotional: oai?.notional ?? 0,
+      sbNotional: sb?.notional ?? 0,
+      fillCount: group.length,
+    };
+  });
+
+  let oaiPos = 0;
+  for (const row of rows) {
+    const delta =
+      row.oaiSide === "buy"
+        ? row.oaiSize
+        : row.oaiSide === "sell"
+          ? -row.oaiSize
+          : 0;
+    if (row.role == null && delta !== 0) {
+      row.role =
+        oaiPos !== 0 && Math.sign(delta) !== Math.sign(oaiPos) ? "exit" : "entry";
+    }
+    oaiPos += delta;
+    if (Math.abs(oaiPos) < 1e-6) oaiPos = 0;
+  }
+
+  return rows
+    .filter((row) => !isTinyOneLeg(row))
     .sort((a, b) => b.time - a.time);
+}
+
+const TINY_ONE_LEG_USD = 1_000;
+
+function isTinyOneLeg(row: OaiSbExecution): boolean {
+  if (row.kind !== "flat") return false;
+  return Math.abs(row.oaiNotional) + Math.abs(row.sbNotional) < TINY_ONE_LEG_USD;
 }
 
 export async function fetchOaiSoftbankFills(): Promise<OaiSbFillsPayload> {

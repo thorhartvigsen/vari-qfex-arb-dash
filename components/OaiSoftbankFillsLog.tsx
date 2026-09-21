@@ -89,7 +89,7 @@ export default function OaiSoftbankFillsLog({
           >
             <th className="px-3 py-2 font-medium">Time</th>
             <th className="px-3 py-2 font-medium">Side</th>
-            <th className="px-3 py-2 font-medium">Entry spread</th>
+            <th className="px-3 py-2 font-medium">Executed spread</th>
             <th className="px-3 py-2 font-medium">OAI</th>
             <th className="px-3 py-2 font-medium">SoftBank</th>
             <th className="px-3 py-2 font-medium">Notional</th>
