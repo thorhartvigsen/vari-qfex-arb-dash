@@ -25,8 +25,8 @@ export const DEFAULT_ORDERS_CHAT_ID = "-5344711654";
 export const OAI_DEX = "io";
 export const MID_PP = CONVERGE_PP;
 export const MAX_LEV = 3;
-/** Isolated cap on Entropy OAI (venue max is 6). */
-export const OAI_ISOLATED_LEV = 6;
+/** Isolated margin on Entropy OAI (venue max is 6). Keep at 3×. */
+export const OAI_ISOLATED_LEV = 3;
 export const OAI_SIZE_DECIMALS = 3;
 export const OAI_PRICE_DECIMALS = 1;
 export const SB_SIZE_DECIMALS = 4;
