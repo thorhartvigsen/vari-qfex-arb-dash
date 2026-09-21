@@ -24,6 +24,8 @@ interface QfexPositionsResponse {
 interface HlClearinghouse {
   marginSummary?: {
     accountValue?: string;
+    totalRawUsd?: string;
+    totalMarginUsed?: string;
   };
   crossMarginSummary?: {
     accountValue?: string;
@@ -35,6 +37,12 @@ interface HlClearinghouse {
       szi?: string;
       entryPx?: string;
       unrealizedPnl?: string;
+      marginUsed?: string;
+      leverage?: {
+        type?: string;
+        value?: number;
+        rawUsd?: string;
+      };
     };
   }>;
 }
@@ -77,14 +85,43 @@ function qfexEquity(balance: QfexPositionsResponse["balance"]): number | null {
   return Number.isFinite(equity) ? equity : null;
 }
 
-/** Same collateral sources as the dashboard P&L card. */
-function hlOaiEquity(io: HlClearinghouse, spot: HlSpotState): number {
-  const ioAv = num(io.marginSummary?.accountValue) ?? 0;
-  const ioCross = num(io.crossMarginSummary?.accountValue) ?? 0;
-  const ioWd = num(io.withdrawable) ?? 0;
+function posNum(pos: HlClearinghouse["assetPositions"], coin: string): {
+  raw: NonNullable<NonNullable<HlClearinghouse["assetPositions"]>[number]["position"]> | null;
+  isolatedUsd: number;
+} {
+  const raw =
+    (pos ?? [])
+      .map((row) => row.position)
+      .find((p) => p?.coin === coin) ?? null;
+  if (!raw) return { raw: null, isolatedUsd: 0 };
+  const isolatedUsd =
+    raw.leverage?.type === "isolated" ? Math.max(0, num(raw.marginUsed) ?? 0) : 0;
+  return { raw, isolatedUsd };
+}
+
+/**
+ * Isolated OAI locks collateral inside the position; withdrawable is the rest.
+ * `marginSummary.accountValue` should already be isolated + free + uPnL.
+ * Never take max(withdrawable, spot) alone — that drops isolated margin.
+ */
+function hlOaiEquity(
+  io: HlClearinghouse,
+  spot: HlSpotState,
+  isolatedUsd: number,
+): { equity: number; isolatedUsd: number; freeUsd: number } {
+  const account = num(io.marginSummary?.accountValue) ?? 0;
+  const freeUsd = Math.max(
+    num(io.withdrawable) ?? 0,
+    num(io.crossMarginSummary?.accountValue) ?? 0,
+  );
   const spotUsdc =
     num((spot.balances ?? []).find((row) => row.coin === "USDC")?.total) ?? 0;
-  return Math.max(ioAv, ioCross, ioWd, spotUsdc);
+  const perp = Math.max(account, isolatedUsd + freeUsd);
+  return {
+    equity: Math.max(perp, spotUsdc),
+    isolatedUsd,
+    freeUsd,
+  };
 }
 
 export interface VenuePosition {
@@ -97,6 +134,8 @@ export interface BookPositions {
   oai: VenuePosition;
   softbank: VenuePosition;
   oaiEquity: number;
+  oaiIsolatedUsd: number;
+  oaiFreeUsd: number;
   sbEquity: number;
   combinedEquity: number;
 }
@@ -119,29 +158,28 @@ export async function fetchBookPositions(): Promise<BookPositions> {
     qfexAuthedGet<QfexPositionsResponse>("/user/positions"),
   ]);
 
-  const oaiRaw =
-    (ioState.assetPositions ?? [])
-      .map((row) => row.position)
-      .find((p) => p?.coin === OAI_COIN) ?? null;
+  const oai = posNum(ioState.assetPositions, OAI_COIN);
   const sbRaw =
     (qfexPos.positions ?? []).find((p) => p.symbol === SB_SYMBOL) ?? null;
 
-  const oaiEquity = hlOaiEquity(ioState, spot);
+  const hl = hlOaiEquity(ioState, spot, oai.isolatedUsd);
   const sbEquity = qfexEquity(qfexPos.balance) ?? 0;
 
   return {
     oai: {
-      size: num(oaiRaw?.szi) ?? 0,
-      entry: num(oaiRaw?.entryPx),
-      uPnl: num(oaiRaw?.unrealizedPnl),
+      size: num(oai.raw?.szi) ?? 0,
+      entry: num(oai.raw?.entryPx),
+      uPnl: num(oai.raw?.unrealizedPnl),
     },
     softbank: {
       size: num(sbRaw?.position) ?? 0,
       entry: num(sbRaw?.average_price),
       uPnl: num(sbRaw?.unrealised_pnl),
     },
-    oaiEquity,
+    oaiEquity: hl.equity,
+    oaiIsolatedUsd: hl.isolatedUsd,
+    oaiFreeUsd: hl.freeUsd,
     sbEquity,
-    combinedEquity: oaiEquity + sbEquity,
+    combinedEquity: hl.equity + sbEquity,
   };
 }

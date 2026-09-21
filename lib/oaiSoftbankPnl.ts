@@ -25,6 +25,17 @@ interface HlClearinghouse {
   marginSummary?: {
     accountValue?: string;
   };
+  crossMarginSummary?: {
+    accountValue?: string;
+  };
+  withdrawable?: string;
+  assetPositions?: Array<{
+    position?: {
+      coin?: string;
+      marginUsed?: string;
+      leverage?: { type?: string };
+    };
+  }>;
 }
 
 interface HlSpotState {
@@ -82,10 +93,19 @@ export async function fetchLiveCollateral(): Promise<PnlPoint> {
   const qfex = qfexEquity(qfexPos.balance);
   const spotUsdc = num(
     (spot.balances ?? []).find((row) => row.coin === "USDC")?.total,
+  ) ?? 0;
+  const ioAccount = num(ioState.marginSummary?.accountValue) ?? 0;
+  const isolated = (ioState.assetPositions ?? []).reduce((sum, row) => {
+    const p = row.position;
+    if (!p || p.leverage?.type !== "isolated") return sum;
+    return sum + Math.max(0, num(p.marginUsed) ?? 0);
+  }, 0);
+  const free = Math.max(
+    num(ioState.withdrawable) ?? 0,
+    num(ioState.crossMarginSummary?.accountValue) ?? 0,
   );
-  const ioEquity = num(ioState.marginSummary?.accountValue);
-  const hl = spotUsdc != null && spotUsdc > 0 ? spotUsdc : ioEquity;
-  if (qfex == null || hl == null) {
+  const hl = Math.max(ioAccount, isolated + free, spotUsdc);
+  if (qfex == null || !(hl > 0)) {
     throw new Error("Missing QFEX or Hyperliquid collateral");
   }
 

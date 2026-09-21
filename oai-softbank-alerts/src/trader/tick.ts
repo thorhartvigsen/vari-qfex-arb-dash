@@ -289,7 +289,7 @@ async function runTraderTickInner(
   let wanted = targetSignedUsd(dir, targetUsd);
   let dOai = clipUsd(wanted.oaiUsd - oaiNow);
   let dSb = clipUsd(wanted.sbUsd - sbNow);
-  const spreadLabel = `mid ${fmtPp(midSpread)} shortTOB ${fmtPp(shortTob)} $1k ${fmtPp(shortWalk.spreadPp)} exec ${fmtPp(touchSpread)} eq ${fmtUsdAbs(pos.oaiEquity)}/${fmtUsdAbs(pos.sbEquity)}`;
+  const spreadLabel = `mid ${fmtPp(midSpread)} shortTOB ${fmtPp(shortTob)} $1k ${fmtPp(shortWalk.spreadPp)} exec ${fmtPp(touchSpread)} eq iso ${fmtUsdAbs(pos.oaiIsolatedUsd)}+free ${fmtUsdAbs(pos.oaiFreeUsd)}=${fmtUsdAbs(pos.oaiEquity)} / ${fmtUsdAbs(pos.sbEquity)}`;
 
   if (plan.action === "hold") {
     rt.lastAction = `hold ${dir} ${plan.currentLev.toFixed(2)}× ${spreadLabel} (entry ${plan.entryLev}× / tp ${plan.exitLev}×)`;
