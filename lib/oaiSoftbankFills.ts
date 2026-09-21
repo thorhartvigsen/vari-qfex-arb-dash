@@ -1,5 +1,6 @@
 import { HL_INFO } from "@/lib/entropy";
 import {
+  CONVERGE_PP,
   FALLBACK_OAI_BASE,
   FALLBACK_SB_BASE,
   FALLBACK_USDJPY,
@@ -52,6 +53,14 @@ export interface OaiSbFillsPayload {
   executions: OaiSbExecution[];
   fills: OaiSbFill[];
   fetchedAt: number;
+}
+
+/** Tape side vs 8%: adding with the spread is entry, covering through 8% is exit. */
+export function fillRole(row: OaiSbExecution): "entry" | "exit" | null {
+  if (row.spreadPp == null || !Number.isFinite(row.spreadPp)) return null;
+  if (row.kind === "short_oai") return row.spreadPp > CONVERGE_PP ? "entry" : "exit";
+  if (row.kind === "long_oai") return row.spreadPp < CONVERGE_PP ? "entry" : "exit";
+  return null;
 }
 
 interface HlFill {

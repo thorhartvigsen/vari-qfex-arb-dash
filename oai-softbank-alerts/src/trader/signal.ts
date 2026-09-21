@@ -239,6 +239,33 @@ export function clipUsd(deltaUsd: number): number {
   return Math.abs(deltaUsd) >= minClipUsd() ? deltaUsd : 0;
 }
 
+/** e.g. "10% for 0.3× enter" — the ladder rung that fired, not the live print. */
+export function formatActivatedRung(
+  action: TradeAction,
+  dir: TradeDir,
+  targetLev: number,
+): string {
+  const verb =
+    action === "take_profit"
+      ? "take profit"
+      : action === "flatten"
+        ? "flatten"
+        : action === "scale"
+          ? "scale"
+          : "enter";
+  if (action === "flatten" || !(targetLev > 0) || dir === "flat") {
+    return `8% for flatten`;
+  }
+  const tiers = action === "take_profit" ? EXIT_TIERS : LEV_TIERS;
+  let dist = 0;
+  for (const tier of tiers) {
+    if (Math.abs(tier.lev - targetLev) < 1e-9) dist = tier.distPp;
+  }
+  const print = dir === "long_oai" ? MID_PP - dist : MID_PP + dist;
+  const label = Number.isInteger(print) ? `${print}` : `${print}`;
+  return `${label}% for ${targetLev}× ${verb}`;
+}
+
 export function formatLevBands(): string {
   return LEV_TIERS.map((t) => {
     const lo = MID_PP - t.distPp;
