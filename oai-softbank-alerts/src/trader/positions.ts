@@ -25,6 +25,10 @@ interface HlClearinghouse {
   marginSummary?: {
     accountValue?: string;
   };
+  crossMarginSummary?: {
+    accountValue?: string;
+  };
+  withdrawable?: string;
   assetPositions?: Array<{
     position?: {
       coin?: string;
@@ -32,6 +36,13 @@ interface HlClearinghouse {
       entryPx?: string;
       unrealizedPnl?: string;
     };
+  }>;
+}
+
+interface HlSpotState {
+  balances?: Array<{
+    coin?: string;
+    total?: string;
   }>;
 }
 
@@ -43,7 +54,9 @@ function num(value: unknown): number | null {
 async function postInfo<T>(body: Record<string, unknown>): Promise<T> {
   const response = await fetch(HL_INFO, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+    },
     body: JSON.stringify(body),
     signal: AbortSignal.timeout(15_000),
   });
@@ -64,6 +77,16 @@ function qfexEquity(balance: QfexPositionsResponse["balance"]): number | null {
   return Number.isFinite(equity) ? equity : null;
 }
 
+/** Same collateral sources as the dashboard P&L card. */
+function hlOaiEquity(io: HlClearinghouse, spot: HlSpotState): number {
+  const ioAv = num(io.marginSummary?.accountValue) ?? 0;
+  const ioCross = num(io.crossMarginSummary?.accountValue) ?? 0;
+  const ioWd = num(io.withdrawable) ?? 0;
+  const spotUsdc =
+    num((spot.balances ?? []).find((row) => row.coin === "USDC")?.total) ?? 0;
+  return Math.max(ioAv, ioCross, ioWd, spotUsdc);
+}
+
 export interface VenuePosition {
   size: number;
   entry: number | null;
@@ -79,14 +102,19 @@ export interface BookPositions {
 }
 
 export async function fetchBookPositions(): Promise<BookPositions> {
-  const wallet = process.env.HL_WALLET_ADDRESS;
+  const wallet = process.env.HL_WALLET_ADDRESS?.trim();
   if (!wallet) throw new Error("Missing HL_WALLET_ADDRESS");
+  const user = wallet.toLowerCase();
 
-  const [ioState, qfexPos] = await Promise.all([
+  const [ioState, spot, qfexPos] = await Promise.all([
     postInfo<HlClearinghouse>({
       type: "clearinghouseState",
-      user: wallet,
+      user,
       dex: OAI_DEX,
+    }),
+    postInfo<HlSpotState>({
+      type: "spotClearinghouseState",
+      user,
     }),
     qfexAuthedGet<QfexPositionsResponse>("/user/positions"),
   ]);
@@ -98,7 +126,7 @@ export async function fetchBookPositions(): Promise<BookPositions> {
   const sbRaw =
     (qfexPos.positions ?? []).find((p) => p.symbol === SB_SYMBOL) ?? null;
 
-  const oaiEquity = num(ioState.marginSummary?.accountValue) ?? 0;
+  const oaiEquity = hlOaiEquity(ioState, spot);
   const sbEquity = qfexEquity(qfexPos.balance) ?? 0;
 
   return {
