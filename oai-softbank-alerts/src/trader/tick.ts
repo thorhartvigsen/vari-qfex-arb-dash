@@ -24,6 +24,7 @@ import type { HlExecClient, HlOrderResult } from "./hlExec.ts";
 import {
   availablePairedUsd,
   conservativeEntrySpread,
+  conservativeUnwindSpread,
   entryMinDistPp,
   entryTouchPx,
   entryTouchSpreadPp,
@@ -37,6 +38,7 @@ import {
   entryLeverage,
   formatExitBands,
   formatLevBands,
+  oppositeDir,
   planBook,
   positionDir,
   reduceOnly,
@@ -157,7 +159,7 @@ async function notifyFill(opts: {
     "",
     "📐 <b>Spreads</b>",
     `Mid: ${esc(fmtPp(opts.midPp))}`,
-    `Touch: <b>${esc(opts.touchPp != null ? fmtPp(opts.touchPp) : "n/a")}</b>`,
+    `${opts.action === "take_profit" || opts.action === "flatten" ? "Unwind" : "Entry"}: <b>${esc(opts.touchPp != null ? fmtPp(opts.touchPp) : "n/a")}</b>`,
     `Fill: <b>${esc(opts.executedPp != null ? fmtPp(opts.executedPp) : "n/a")}</b>`,
     "",
     "💱 <b>Fills</b>",
@@ -184,7 +186,7 @@ export async function sendTraderStarted(live: boolean, dry: boolean): Promise<vo
           ? "<b>OAI / SoftBank trader up · DRY RUN</b>"
           : "<b>OAI / SoftBank trader idle</b> — missing HL/QFEX keys",
       "Paired by $ notional · OAI USD vs SoftBank JPY (QFEX 1:1 USDC)",
-      "Scale-in on executable TOB / $1k walk · mid only for TP through 8%",
+      "Scale-in and TP on executable bid/ask · flatten when unwind print is at 8%",
       "Fill both legs first · retry incomplete",
       `Max ${MAX_LEV}× of min venue equity`,
       `Scale-in: ${formatLevBands()}`,
@@ -279,17 +281,44 @@ async function runTraderTickInner(
   else if (shortLev >= longLev && shortLev > 0) touchSpread = shortExec;
   else if (longLev > 0) touchSpread = longExec;
   else touchSpread = null;
+  const coverDir = oppositeDir(posDir);
+  const unwindTob =
+    coverDir === "flat"
+      ? null
+      : coverDir === "short_oai"
+        ? shortTob
+        : longTob;
+  const unwindWalk =
+    coverDir === "flat"
+      ? { spreadPp: null, filled: false }
+      : coverDir === "short_oai"
+        ? shortWalk
+        : longWalk;
+  const unwindSpread = conservativeUnwindSpread(
+    posDir,
+    unwindTob,
+    unwindWalk.spreadPp,
+    unwindWalk.filled,
+  );
   const watchDir =
     touchSpread == null ? sideOfMid(midSpread) : sideOfMid(touchSpread);
   const touch = entryTouchPx({ dir: watchDir, ...books });
-  const plan = planBook(midSpread, oaiNow, sbNow, baseUsd, touchSpread);
+  const unwindTouch = entryTouchPx({ dir: coverDir, ...books });
+  const plan = planBook(
+    midSpread,
+    oaiNow,
+    sbNow,
+    baseUsd,
+    touchSpread,
+    unwindSpread,
+  );
   const lev = plan.targetLev;
   const dir = plan.dir;
   const targetUsd = lev * baseUsd;
   let wanted = targetSignedUsd(dir, targetUsd);
   let dOai = clipUsd(wanted.oaiUsd - oaiNow);
   let dSb = clipUsd(wanted.sbUsd - sbNow);
-  const spreadLabel = `mid ${fmtPp(midSpread)} shortTOB ${fmtPp(shortTob)} $1k ${fmtPp(shortWalk.spreadPp)} exec ${fmtPp(touchSpread)} eq iso ${fmtUsdAbs(pos.oaiIsolatedUsd)}+free ${fmtUsdAbs(pos.oaiFreeUsd)}=${fmtUsdAbs(pos.oaiEquity)} / ${fmtUsdAbs(pos.sbEquity)}`;
+  const spreadLabel = `mid ${fmtPp(midSpread)} shortTOB ${fmtPp(shortTob)} $1k ${fmtPp(shortWalk.spreadPp)} exec ${fmtPp(touchSpread)} unwind ${fmtPp(unwindSpread)} eq iso ${fmtUsdAbs(pos.oaiIsolatedUsd)}+free ${fmtUsdAbs(pos.oaiFreeUsd)}=${fmtUsdAbs(pos.oaiEquity)} / ${fmtUsdAbs(pos.sbEquity)}`;
 
   if (plan.action === "hold") {
     rt.lastAction = `hold ${dir} ${plan.currentLev.toFixed(2)}× ${spreadLabel} (entry ${plan.entryLev}× / tp ${plan.exitLev}×)`;
@@ -380,18 +409,19 @@ async function runTraderTickInner(
     const sbClip = Math.abs(remainingSb) >= 150 ? remainingSb : 0;
     if (oaiClip === 0 && sbClip === 0) break;
 
-    const oaiRef =
-      (action === "enter" || action === "scale") && touch
-        ? touch.oaiPx
+    const covering = action === "take_profit" || action === "flatten";
+    const oaiRef = covering
+      ? (unwindTouch?.oaiPx ?? mids.oai)
+      : action === "enter" || action === "scale"
+        ? (touch?.oaiPx ?? mids.oai)
         : mids.oai;
+    const sbRef = covering
+      ? (unwindTouch?.sbJpy ?? mids.sbJpy)
+      : action === "enter" || action === "scale"
+        ? (touch?.sbJpy ?? mids.sbJpy)
+        : mids.sbJpy;
     const oaiNext = sizeFromDeltaUsd(oaiClip, oaiRef, OAI_SIZE_DECIMALS);
-    const sbNext = sizeFromDeltaUsd(
-      sbClip,
-      (action === "enter" || action === "scale") && touch
-        ? touch.sbJpy
-        : mids.sbJpy,
-      SB_SIZE_DECIMALS,
-    );
+    const sbNext = sizeFromDeltaUsd(sbClip, sbRef, SB_SIZE_DECIMALS);
 
     const jobs: Array<Promise<void>> = [];
     if (oaiClip !== 0 && oaiNext.size > 0) {
@@ -479,7 +509,10 @@ async function runTraderTickInner(
       dir,
       fillStatus,
       midPp: midSpread,
-      touchPp: touchSpread,
+      touchPp:
+        action === "take_profit" || action === "flatten"
+          ? unwindSpread
+          : touchSpread,
       executedPp,
       lev,
       targetUsd,

@@ -44,6 +44,13 @@ export function sideOfMid(spreadPp: number): TradeDir {
   return "flat";
 }
 
+/** Covering `posDir` hits the opposite book. Short → buy OAI ask / sell SB bid. */
+export function oppositeDir(dir: TradeDir): TradeDir {
+  if (dir === "short_oai") return "long_oai";
+  if (dir === "long_oai") return "short_oai";
+  return "flat";
+}
+
 export function positionDir(oaiUsd: number, sbUsd: number): TradeDir {
   const clip = minClipUsd();
   const hasOai = Math.abs(oaiUsd) >= clip;
@@ -77,9 +84,8 @@ export interface BookPlan {
 }
 
 /**
- * Mid is for take-profit / flatten through 8%.
- * `entrySpreadPp` is the executable bid/ask (TOB, or $1k walk if worse) —
- * that number sizes the scale-in rung, matching the dashboard book rows.
+ * Entry uses executable bid/ask. TP / flatten use the unwind bid/ask
+ * (cover a short at OAI ask / SoftBank bid).
  */
 export function planBook(
   midSpreadPp: number,
@@ -87,9 +93,11 @@ export function planBook(
   sbUsd: number,
   baseUsd: number,
   entrySpreadPp: number | null = null,
+  unwindSpreadPp: number | null = null,
 ): BookPlan {
   const addDir = entrySpreadPp == null ? "flat" : sideOfMid(entrySpreadPp);
-  const midDir = sideOfMid(midSpreadPp);
+  const unwindDir =
+    unwindSpreadPp == null ? "flat" : sideOfMid(unwindSpreadPp);
   const entryLev =
     addDir !== "flat" &&
     entrySpreadPp != null &&
@@ -97,7 +105,8 @@ export function planBook(
       (addDir === "long_oai" && entrySpreadPp < MID_PP))
       ? entryLeverage(entrySpreadPp)
       : 0;
-  const exitLev = exitLeverage(midSpreadPp);
+  const exitLev =
+    unwindSpreadPp == null ? MAX_LEV : exitLeverage(unwindSpreadPp);
   const posDir = positionDir(oaiUsd, sbUsd);
   const currentLev = currentLeverage(oaiUsd, sbUsd, baseUsd);
   const eps = LEV_HOLD_EPS;
@@ -137,7 +146,10 @@ export function planBook(
     };
   }
 
-  if (midDir !== "flat" && midDir !== posDir) {
+  if (
+    unwindSpreadPp != null &&
+    unwindDir !== posDir
+  ) {
     return {
       dir: posDir,
       targetLev: 0,

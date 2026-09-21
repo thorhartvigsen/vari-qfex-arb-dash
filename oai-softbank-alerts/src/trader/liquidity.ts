@@ -99,18 +99,17 @@ export function touchSupportsEntry(dir: TradeDir, touchPp: number | null): boole
   return touchPp < MID_PP;
 }
 
-/** Worse of TOB and a fully filled $1k walk, still on the entry side of 8%. */
-export function conservativeEntrySpread(
-  dir: TradeDir,
+/** Worse unwind print — don't TP until even this has come in toward 8%. */
+export function conservativeUnwindSpread(
+  posDir: TradeDir,
   tobPp: number | null,
   walkPp: number | null,
+  walkFilled: boolean,
 ): number | null {
-  if (tobPp == null || walkPp == null) return null;
-  if (!touchSupportsEntry(dir, tobPp) || !touchSupportsEntry(dir, walkPp)) {
-    return null;
-  }
-  if (dir === "short_oai") return Math.min(tobPp, walkPp);
-  return Math.max(tobPp, walkPp);
+  if (tobPp == null || posDir === "flat") return null;
+  if (!walkFilled || walkPp == null) return tobPp;
+  if (posDir === "short_oai") return Math.max(tobPp, walkPp);
+  return Math.min(tobPp, walkPp);
 }
 
 /**
