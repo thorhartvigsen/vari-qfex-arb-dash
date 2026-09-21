@@ -9,6 +9,7 @@ import {
   SB_SIZE_DECIMALS,
   SB_SYMBOL,
   TRADE_COOLDOWN_MS,
+  WALK_USD,
   fmtPx,
   listingSpreadPp,
   minClipUsd,
@@ -22,17 +23,22 @@ import { esc, telegramSend } from "../telegram.ts";
 import type { HlExecClient, HlOrderResult } from "./hlExec.ts";
 import {
   availablePairedUsd,
+  conservativeEntrySpread,
+  entryMinDistPp,
   entryTouchPx,
   entryTouchSpreadPp,
+  entryWalkSpreadPp,
 } from "./liquidity.ts";
 import type { QfexOrderResult, QfexTradeClient } from "./qfexExec.ts";
 import { fetchBookPositions } from "./positions.ts";
 import {
   clipUsd,
   directionLabel,
+  entryLeverage,
   formatExitBands,
   formatLevBands,
   planBook,
+  positionDir,
   reduceOnly,
   sideOfMid,
   roundSize,
@@ -178,7 +184,7 @@ export async function sendTraderStarted(live: boolean, dry: boolean): Promise<vo
           ? "<b>OAI / SoftBank trader up · DRY RUN</b>"
           : "<b>OAI / SoftBank trader idle</b> — missing HL/QFEX keys",
       "Paired by $ notional · OAI USD vs SoftBank JPY (QFEX 1:1 USDC)",
-      "Scale-in on executable bid/ask · mid only for side of 8% and TP",
+      "Scale-in on executable TOB / $1k walk · mid only for TP through 8%",
       "Fill both legs first · retry incomplete",
       `Max ${MAX_LEV}× of min venue equity`,
       `Scale-in: ${formatLevBands()}`,
@@ -225,25 +231,57 @@ async function runTraderTickInner(
   const oaiNow = signedNotional(pos.oai.size, mids.oai);
   const sbNow = signedNotional(pos.softbank.size, mids.sbJpy);
   const baseUsd = Math.min(pos.oaiEquity, pos.sbEquity);
-  const watchDir = sideOfMid(midSpread);
-  const touch = entryTouchPx({
-    dir: watchDir,
+  const books = {
     oaiBids: mids.oaiBids,
     oaiAsks: mids.oaiAsks,
     sbBids: mids.sbBids,
     sbAsks: mids.sbAsks,
     usdJpy: mids.usdJpy,
-  });
-  const touchSpread = entryTouchSpreadPp({
-    dir: watchDir,
-    oaiBids: mids.oaiBids,
-    oaiAsks: mids.oaiAsks,
-    sbBids: mids.sbBids,
-    sbAsks: mids.sbAsks,
-    usdJpy: mids.usdJpy,
+  };
+  const shortTob = entryTouchSpreadPp({
+    ...books,
+    dir: "short_oai",
     oaiBase,
     sbBase,
   });
+  const longTob = entryTouchSpreadPp({
+    ...books,
+    dir: "long_oai",
+    oaiBase,
+    sbBase,
+  });
+  const shortWalk = entryWalkSpreadPp({
+    ...books,
+    dir: "short_oai",
+    oaiBase,
+    sbBase,
+    usd: WALK_USD,
+  });
+  const longWalk = entryWalkSpreadPp({
+    ...books,
+    dir: "long_oai",
+    oaiBase,
+    sbBase,
+    usd: WALK_USD,
+  });
+  const shortExec = shortWalk.filled
+    ? conservativeEntrySpread("short_oai", shortTob, shortWalk.spreadPp)
+    : null;
+  const longExec = longWalk.filled
+    ? conservativeEntrySpread("long_oai", longTob, longWalk.spreadPp)
+    : null;
+  const shortLev = shortExec == null ? 0 : entryLeverage(shortExec);
+  const longLev = longExec == null ? 0 : entryLeverage(longExec);
+  const posDir = positionDir(oaiNow, sbNow);
+  let touchSpread: number | null;
+  if (posDir === "short_oai") touchSpread = shortExec;
+  else if (posDir === "long_oai") touchSpread = longExec;
+  else if (shortLev >= longLev && shortLev > 0) touchSpread = shortExec;
+  else if (longLev > 0) touchSpread = longExec;
+  else touchSpread = null;
+  const watchDir =
+    touchSpread == null ? sideOfMid(midSpread) : sideOfMid(touchSpread);
+  const touch = entryTouchPx({ dir: watchDir, ...books });
   const plan = planBook(midSpread, oaiNow, sbNow, baseUsd, touchSpread);
   const lev = plan.targetLev;
   const dir = plan.dir;
@@ -251,14 +289,19 @@ async function runTraderTickInner(
   let wanted = targetSignedUsd(dir, targetUsd);
   let dOai = clipUsd(wanted.oaiUsd - oaiNow);
   let dSb = clipUsd(wanted.sbUsd - sbNow);
-  const spreadLabel = `mid ${fmtPp(midSpread)} touch ${touchSpread == null ? "n/a" : fmtPp(touchSpread)} eq ${fmtUsdAbs(pos.oaiEquity)}/${fmtUsdAbs(pos.sbEquity)}`;
+  const spreadLabel = `mid ${fmtPp(midSpread)} shortTOB ${fmtPp(shortTob)} $1k ${fmtPp(shortWalk.spreadPp)} exec ${fmtPp(touchSpread)} eq ${fmtUsdAbs(pos.oaiEquity)}/${fmtUsdAbs(pos.sbEquity)}`;
 
-  if (plan.action === "hold" || (dOai === 0 && dSb === 0)) {
+  if (plan.action === "hold") {
     rt.lastAction = `hold ${dir} ${plan.currentLev.toFixed(2)}× ${spreadLabel} (entry ${plan.entryLev}× / tp ${plan.exitLev}×)`;
+    return;
+  }
+  if (dOai === 0 && dSb === 0) {
+    rt.lastAction = `${plan.action} skip Δ0 ${spreadLabel} target ${fmtUsdAbs(targetUsd)} (entry ${plan.entryLev}×)`;
     return;
   }
 
   if (plan.action === "enter" || plan.action === "scale") {
+    const minDist = entryMinDistPp(plan.targetLev);
     const needUsd = Math.max(Math.abs(dOai), Math.abs(dSb));
     const avail = availablePairedUsd({
       dir,
@@ -269,7 +312,7 @@ async function runTraderTickInner(
       usdJpy: mids.usdJpy,
       oaiBase,
       sbBase,
-      minDistPp: 0,
+      minDistPp: minDist,
       maxUsd: needUsd,
     });
     if (avail + 1e-6 < minClipUsd()) {

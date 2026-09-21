@@ -41,10 +41,76 @@ export function entryTouchSpreadPp(opts: {
   return listingSpreadPp(touch.oaiPx, touch.sbUsd, opts.oaiBase, opts.sbBase);
 }
 
+/**
+ * VWAP listing spread after independently walking `usd` on each entry-side
+ * book (same as the dashboard $1,000 row).
+ */
+export function entryWalkSpreadPp(opts: {
+  dir: TradeDir;
+  oaiBids: BookLevel[];
+  oaiAsks: BookLevel[];
+  sbBids: BookLevel[];
+  sbAsks: BookLevel[];
+  usdJpy: number;
+  oaiBase: number;
+  sbBase: number;
+  usd: number;
+}): { spreadPp: number | null; filled: boolean } {
+  if (opts.dir === "flat" || !(opts.usd > 0) || !(opts.usdJpy > 0)) {
+    return { spreadPp: null, filled: false };
+  }
+  const oaiLevels = opts.dir === "short_oai" ? opts.oaiBids : opts.oaiAsks;
+  const sbLevels = opts.dir === "short_oai" ? opts.sbAsks : opts.sbBids;
+  const oai = walkUsd(oaiLevels, opts.usd);
+  const sb = walkUsd(sbLevels, opts.usd);
+  if (!oai || !sb) return { spreadPp: null, filled: false };
+  const sbUsd = sb.avgPrice / opts.usdJpy;
+  return {
+    spreadPp: listingSpreadPp(oai.avgPrice, sbUsd, opts.oaiBase, opts.sbBase),
+    filled: oai.fullyFilled && sb.fullyFilled,
+  };
+}
+
+function walkUsd(
+  levels: BookLevel[],
+  usd: number,
+): { avgPrice: number; fullyFilled: boolean } | null {
+  if (!levels.length) return null;
+  let remaining = usd;
+  let qty = 0;
+  let spent = 0;
+  for (const level of levels) {
+    if (remaining <= 0) break;
+    const px = level.price;
+    const notional = px * level.size;
+    if (!(px > 0) || !(notional > 0)) continue;
+    const take = Math.min(remaining, notional);
+    qty += take / px;
+    spent += take;
+    remaining -= take;
+  }
+  if (qty <= 0 || spent <= 0) return null;
+  return { avgPrice: spent / qty, fullyFilled: remaining <= usd * 1e-9 };
+}
+
 export function touchSupportsEntry(dir: TradeDir, touchPp: number | null): boolean {
   if (touchPp == null || dir === "flat") return false;
   if (dir === "short_oai") return touchPp > MID_PP;
   return touchPp < MID_PP;
+}
+
+/** Worse of TOB and a fully filled $1k walk, still on the entry side of 8%. */
+export function conservativeEntrySpread(
+  dir: TradeDir,
+  tobPp: number | null,
+  walkPp: number | null,
+): number | null {
+  if (tobPp == null || walkPp == null) return null;
+  if (!touchSupportsEntry(dir, tobPp) || !touchSupportsEntry(dir, walkPp)) {
+    return null;
+  }
+  if (dir === "short_oai") return Math.min(tobPp, walkPp);
+  return Math.max(tobPp, walkPp);
 }
 
 /**

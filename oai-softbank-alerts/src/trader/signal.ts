@@ -77,23 +77,26 @@ export interface BookPlan {
 }
 
 /**
- * Mid chooses side of 8%, leverage rung, and take-profit.
- * `entrySpreadPp` is the bid/ask we would hit — must still be on that
- * side of 8% or we will not add size.
+ * Mid is for take-profit / flatten through 8%.
+ * `entrySpreadPp` is the executable bid/ask (TOB, or $1k walk if worse) —
+ * that number sizes the scale-in rung, matching the dashboard book rows.
  */
 export function planBook(
   midSpreadPp: number,
   oaiUsd: number,
   sbUsd: number,
   baseUsd: number,
-  entrySpreadPp: number | null = midSpreadPp,
+  entrySpreadPp: number | null = null,
 ): BookPlan {
-  const signalDir = sideOfMid(midSpreadPp);
-  const touchOk =
+  const addDir = entrySpreadPp == null ? "flat" : sideOfMid(entrySpreadPp);
+  const midDir = sideOfMid(midSpreadPp);
+  const entryLev =
+    addDir !== "flat" &&
     entrySpreadPp != null &&
-    ((signalDir === "short_oai" && entrySpreadPp > MID_PP) ||
-      (signalDir === "long_oai" && entrySpreadPp < MID_PP));
-  const entryLev = touchOk ? entryLeverage(midSpreadPp) : 0;
+    ((addDir === "short_oai" && entrySpreadPp > MID_PP) ||
+      (addDir === "long_oai" && entrySpreadPp < MID_PP))
+      ? entryLeverage(entrySpreadPp)
+      : 0;
   const exitLev = exitLeverage(midSpreadPp);
   const posDir = positionDir(oaiUsd, sbUsd);
   const currentLev = currentLeverage(oaiUsd, sbUsd, baseUsd);
@@ -114,7 +117,7 @@ export function planBook(
   }
 
   if (posDir === "flat") {
-    if (entryLev <= 0 || signalDir === "flat") {
+    if (entryLev <= 0 || addDir === "flat") {
       return {
         dir: "flat",
         targetLev: 0,
@@ -125,7 +128,7 @@ export function planBook(
       };
     }
     return {
-      dir: signalDir,
+      dir: addDir,
       targetLev: entryLev,
       entryLev,
       exitLev,
@@ -134,7 +137,7 @@ export function planBook(
     };
   }
 
-  if (signalDir !== posDir) {
+  if (midDir !== "flat" && midDir !== posDir) {
     return {
       dir: posDir,
       targetLev: 0,
@@ -145,7 +148,7 @@ export function planBook(
     };
   }
 
-  if (currentLev + eps < entryLev) {
+  if (addDir === posDir && currentLev + eps < entryLev) {
     return {
       dir: posDir,
       targetLev: entryLev,

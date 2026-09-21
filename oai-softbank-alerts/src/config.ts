@@ -34,6 +34,8 @@ export const SB_PRICE_DECIMALS = 1;
 /** IOC vs touch: first clip 50 bps, retry 50 bps, then 100 bps. */
 export const HL_SLIPPAGE_SCHEDULE_BPS = [50, 50, 100] as const;
 export const MIN_CLIP_USD = 400;
+/** Dashboard $1,000 executable print — must still hold the entry rung. */
+export const WALK_USD = 1_000;
 export const TRADE_COOLDOWN_MS = 4_000;
 export const RETRY_COOLDOWN_MS = 1_500;
 

@@ -12,13 +12,13 @@ export default function OaiSoftbankSignalPanel() {
         </h2>
         <p className="text-sm" style={{ color: "var(--arb-text)", opacity: 0.8 }}>
           Listing-relative mid {MID_PP}% · max {MAX_LEV}× of the thinner venue ·
-          rung from mid; only add size if bid/ask of that side is still past 8%
+          scale-in from bid/ask TOB and $1,000 walk; take-profit uses mid
         </p>
       </div>
       <div className="grid gap-3 md:grid-cols-2">
         <TierTable
           title="Scale-in"
-          caption="Add size when the mid is this far from 8%"
+          caption="Add size when the executable bid/ask is this far from 8%"
           rows={ENTRY_TIERS.map((t) => ({
             lev: t.lev,
             dist: t.distPp,
@@ -37,11 +37,12 @@ export default function OaiSoftbankSignalPanel() {
       </div>
       <p className="text-xs" style={{ color: "var(--arb-text)", opacity: 0.7 }}>
         Above 8%: short OAI (hit bid) / long SoftBank (lift ask). Below 8%: long
-        OAI (lift ask) / short SoftBank (hit bid). Leverage rung and TP use mids.
-        Scale-in only fires if that touch is still on the same side of 8%. Legs
-        paired in account dollars. Size is the gap to target, capped to paired
-        book depth that stays on the correct side of 8%. Flatten / TP does not
-        wait on that spread — filling both legs comes first.
+        OAI (lift ask) / short SoftBank (hit bid). Scale-in uses the worse of TOB
+        and the $1,000 walk on that book — the same prints as the dashboard.
+        Take-profit / flatten through 8% still uses mids. Legs paired in account
+        dollars. Size is the gap to target, capped to paired depth that still
+        holds the entry rung. Flatten / TP does not wait on that spread —
+        filling both legs comes first.
       </p>
     </section>
   );
