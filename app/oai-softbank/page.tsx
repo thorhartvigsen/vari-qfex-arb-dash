@@ -39,6 +39,7 @@ const RANGE_LABELS: Record<OaiSbRange, string> = {
   "1d": "1d",
   "3d": "3d",
   "7d": "7d",
+  "14d": "14d",
   all: "since listing",
 };
 

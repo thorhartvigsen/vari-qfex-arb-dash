@@ -108,9 +108,10 @@ export default function OaiSoftbankPnlChart({
       if (lastMinute === liveMinute) rows[rows.length - 1] = live;
       else rows.push(live);
     }
+    const baseline = rows[0]?.total ?? START_COLLATERAL;
     return rows.map((row) => ({
       time: row.time,
-      value: series === "pnl" ? row.total - START_COLLATERAL : row.total,
+      value: series === "pnl" ? row.total - baseline : row.total,
     }));
   }, [data, live, series]);
 

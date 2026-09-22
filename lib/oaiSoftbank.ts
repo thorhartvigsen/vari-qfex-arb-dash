@@ -28,13 +28,14 @@ export const FALLBACK_OAI_BASE = 1151.8;
 export const FALLBACK_SB_BASE = 31.235;
 export const FALLBACK_USDJPY = 159.6;
 
-export const SPREAD_RANGES = ["1d", "3d", "7d", "all"] as const;
+export const SPREAD_RANGES = ["1d", "3d", "7d", "14d", "all"] as const;
 export type OaiSbRange = (typeof SPREAD_RANGES)[number];
 
 export const SPREAD_RANGE_MS: Record<OaiSbRange, number | null> = {
   "1d": 1 * 24 * 60 * 60 * 1000,
   "3d": 3 * 24 * 60 * 60 * 1000,
   "7d": 7 * 24 * 60 * 60 * 1000,
+  "14d": 14 * 24 * 60 * 60 * 1000,
   all: null,
 };
 

@@ -26,14 +26,13 @@ export type PnlPersist = "blob" | "local" | "ephemeral";
 
 const PERIODS_PER_YEAR = 365.25 * 24 * 20; // 3-minute bars
 
-export function pnlStats(
-  points: PnlPoint[],
-  start = START_COLLATERAL,
-): PnlStats {
+export function pnlStats(points: PnlPoint[]): PnlStats {
   const totals = points.map((p) => p.total).filter((n) => n > 0);
+  const first = totals[0];
   const last = totals[totals.length - 1];
-  const pnlUsd = last == null ? null : last - start;
-  const pnlPct = pnlUsd == null || !(start > 0) ? null : (pnlUsd / start) * 100;
+  const pnlUsd =
+    first == null || last == null ? null : last - first;
+  const pnlPct = pnlUsd == null || !(first > 0) ? null : (pnlUsd / first) * 100;
 
   const returns: number[] = [];
   for (let i = 1; i < totals.length; i += 1) {

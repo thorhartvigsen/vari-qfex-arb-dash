@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useMemo, useState } from "react";
 import { formatChartTime, formatPp, formatPrice, formatSigned } from "@/lib/format";
 import { OAI_DECIMALS, SB_DECIMALS } from "@/lib/oaiSoftbank";
 import type { OaiSbExecution } from "@/lib/oaiSoftbankFills";
@@ -8,6 +9,7 @@ import { tone } from "@/components/arbUi";
 
 const ENTRY_DOT = "#6b8cff";
 const EXIT_DOT = "#c45c4a";
+const PAGE_SIZE = 15;
 
 function kindLabel(kind: OaiSbExecution["kind"]): string {
   if (kind === "short_oai") return "Short OAI / long SoftBank";
@@ -73,6 +75,26 @@ export default function OaiSoftbankFillsLog({
   }
 
   return (
+    <FillsTable executions={executions} />
+  );
+}
+
+function FillsTable({ executions }: { executions: OaiSbExecution[] }) {
+  const [page, setPage] = useState(0);
+  const pageCount = Math.max(1, Math.ceil(executions.length / PAGE_SIZE));
+  const safePage = Math.min(page, pageCount - 1);
+  const slice = useMemo(
+    () =>
+      executions.slice(safePage * PAGE_SIZE, safePage * PAGE_SIZE + PAGE_SIZE),
+    [executions, safePage],
+  );
+  const newest = executions[0]?.time ?? 0;
+
+  useEffect(() => {
+    setPage(0);
+  }, [newest]);
+
+  return (
     <div className="space-y-2">
     <div
       className="overflow-x-auto rounded-lg"
@@ -96,7 +118,7 @@ export default function OaiSoftbankFillsLog({
           </tr>
         </thead>
         <tbody>
-          {executions.map((row) => (
+          {slice.map((row) => (
             <tr
               key={`${row.time}-${row.fillCount}-${row.oaiSize}-${row.sbSize}`}
               style={{ borderTop: "1px solid var(--arb-border)" }}
@@ -132,16 +154,43 @@ export default function OaiSoftbankFillsLog({
         </tbody>
       </table>
     </div>
-      <p className="flex items-center gap-3 px-1 text-xs" style={{ color: "var(--arb-text)", opacity: 0.7 }}>
-        <span className="inline-flex items-center gap-1.5">
-          <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: ENTRY_DOT }} />
-          Enter / scale
-        </span>
-        <span className="inline-flex items-center gap-1.5">
-          <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: EXIT_DOT }} />
-          Take profit / flatten
-        </span>
-      </p>
+      <div className="flex items-center justify-between gap-3 px-1">
+        <p className="flex items-center gap-3 text-xs" style={{ color: "var(--arb-text)", opacity: 0.7 }}>
+          <span className="inline-flex items-center gap-1.5">
+            <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: ENTRY_DOT }} />
+            Enter / scale
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: EXIT_DOT }} />
+            Take profit / flatten
+          </span>
+        </p>
+        {pageCount > 1 ? (
+          <div className="flex items-center gap-2 text-xs" style={{ color: "var(--arb-text)" }}>
+            <button
+              type="button"
+              disabled={safePage <= 0}
+              onClick={() => setPage((p) => Math.max(0, p - 1))}
+              className="rounded px-2 py-1 disabled:opacity-40"
+              style={{ border: "1px solid var(--arb-border)" }}
+            >
+              Prev
+            </button>
+            <span className="font-mono" style={{ opacity: 0.8 }}>
+              {safePage + 1} / {pageCount}
+            </span>
+            <button
+              type="button"
+              disabled={safePage >= pageCount - 1}
+              onClick={() => setPage((p) => Math.min(pageCount - 1, p + 1))}
+              className="rounded px-2 py-1 disabled:opacity-40"
+              style={{ border: "1px solid var(--arb-border)" }}
+            >
+              Next
+            </button>
+          </div>
+        ) : null}
+      </div>
     </div>
   );
 }
