@@ -347,7 +347,7 @@ function haltEnterScale(
         `New notional ${esc(fmtUsdAbs(fund.newNotionalUsd))} · 3× cap ${esc(fmtUsdAbs(fund.capacityUsd))}`,
         `Clip ${esc(fmtUsdAbs(dOai))} · extra IM ${esc(fmtUsdAbs(fund.extraImUsd))}`,
         distPct != null ? `Dist ${esc(fmtPct(distPct))} from liq` : "Dist n/a",
-        `Isolated ${esc(fmtUsdAbs(pos.oaiIsolatedUsd))} · free ${esc(fmtUsdAbs(pos.oaiFreeUsd))}`,
+        `Isolated ${esc(fmtUsdAbs(pos.oaiIsolatedUsd))} · unused ${esc(fmtUsdAbs(pos.oaiFreeUsd))}`,
         "Enter/scale skipped · SoftBank not sent",
         "TP/flatten still on",
       ].join("\n"),

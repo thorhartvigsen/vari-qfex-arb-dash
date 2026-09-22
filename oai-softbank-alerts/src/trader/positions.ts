@@ -101,9 +101,10 @@ function posNum(pos: HlClearinghouse["assetPositions"], coin: string): {
 }
 
 /**
- * Isolated OAI locks collateral inside the position; withdrawable is the rest.
- * `marginSummary.accountValue` should already be isolated + free + uPnL.
- * Never take max(withdrawable, spot) alone — that drops isolated margin.
+ * Isolated OAI locks collateral inside the position; unused USDC stays in
+ * accountValue. HIP-3 often reports withdrawable=0 for that unused slice.
+ * Hyperliquid pulls it into isolated automatically on a size increase.
+ * We only `updateIsolatedMargin` on the 10%→15% liq top-up.
  */
 function hlOaiEquity(
   io: HlClearinghouse,
@@ -111,9 +112,11 @@ function hlOaiEquity(
   isolatedUsd: number,
 ): { equity: number; isolatedUsd: number; freeUsd: number } {
   const account = num(io.marginSummary?.accountValue) ?? 0;
+  const unusedIo = Math.max(0, account - isolatedUsd);
   const freeUsd = Math.max(
     num(io.withdrawable) ?? 0,
     num(io.crossMarginSummary?.accountValue) ?? 0,
+    unusedIo,
   );
   const spotUsdc =
     num((spot.balances ?? []).find((row) => row.coin === "USDC")?.total) ?? 0;

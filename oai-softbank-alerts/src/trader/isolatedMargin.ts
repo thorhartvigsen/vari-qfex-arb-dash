@@ -69,8 +69,8 @@ export function isolatedCapacityUsd(isolatedUsd: number, freeUsd: number): numbe
 }
 
 /**
- * Isolated surplus already on the position can fund a size increase.
- * Withdrawable is only needed when new notional would exceed isolated×3.
+ * HL pulls unused io cash into isolated on a size increase.
+ * Capacity is isolated + unused, not isolated alone.
  */
 export function canFundIsolatedClip(opts: {
   isolatedUsd: number;
