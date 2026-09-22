@@ -27,6 +27,12 @@ export const MID_PP = CONVERGE_PP;
 export const MAX_LEV = 3;
 /** Isolated margin on Entropy OAI (venue max is 6). Keep at 3×. */
 export const OAI_ISOLATED_LEV = 3;
+/** Add unused USDC into isolated OAI when room-to-liq drops onto this. */
+export const LIQ_TOPUP_TRIGGER_PCT = 10;
+/** Isolated top-up target room-to-liq. */
+export const LIQ_TOPUP_TARGET_PCT = 15;
+/** Skip dust transfers; treat free below this as depleted for enter/scale. */
+export const MIN_ISOLATED_TOPUP_USD = 25;
 export const OAI_SIZE_DECIMALS = 3;
 export const OAI_PRICE_DECIMALS = 1;
 export const SB_SIZE_DECIMALS = 4;

@@ -81,6 +81,33 @@ export class HlExecClient {
     });
   }
 
+  /** Positive USD adds isolated collateral; negative removes it. */
+  async updateIsolatedMarginUsd(
+    usd: number,
+    coin: string = OAI_COIN,
+  ): Promise<{ ok: boolean; raw: unknown }> {
+    const ntli = Math.round(usd * 1e6);
+    if (ntli === 0) return { ok: true, raw: { skipped: "ntli 0" } };
+    const { assetId } = await resolveIoAsset(coin);
+    try {
+      console.log(
+        `[hl] isolated margin ${usd > 0 ? "+" : ""}$${usd.toFixed(0)} a=${assetId}`,
+      );
+      const raw = await this.client.updateIsolatedMargin({
+        asset: assetId,
+        isBuy: true,
+        ntli,
+      });
+      return { ok: true, raw };
+    } catch (err) {
+      console.error(`[hl] updateIsolatedMargin threw ${coin}`, err);
+      return {
+        ok: false,
+        raw: { error: err instanceof Error ? err.message : String(err) },
+      };
+    }
+  }
+
   async marketOrder(opts: {
     isBuy: boolean;
     size: number;

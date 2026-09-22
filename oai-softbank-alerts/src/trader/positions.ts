@@ -38,6 +38,7 @@ interface HlClearinghouse {
       entryPx?: string;
       unrealizedPnl?: string;
       marginUsed?: string;
+      liquidationPx?: string | null;
       leverage?: {
         type?: string;
         value?: number;
@@ -128,6 +129,7 @@ export interface VenuePosition {
   size: number;
   entry: number | null;
   uPnl: number | null;
+  liqPx: number | null;
 }
 
 export interface BookPositions {
@@ -170,11 +172,13 @@ export async function fetchBookPositions(): Promise<BookPositions> {
       size: num(oai.raw?.szi) ?? 0,
       entry: num(oai.raw?.entryPx),
       uPnl: num(oai.raw?.unrealizedPnl),
+      liqPx: num(oai.raw?.liquidationPx),
     },
     softbank: {
       size: num(sbRaw?.position) ?? 0,
       entry: num(sbRaw?.average_price),
       uPnl: num(sbRaw?.unrealised_pnl),
+      liqPx: null,
     },
     oaiEquity: hl.equity,
     oaiIsolatedUsd: hl.isolatedUsd,
