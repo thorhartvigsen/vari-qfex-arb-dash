@@ -50,7 +50,7 @@ Target leverage vs **|listing-spread − 8 pp|**, max **3×** of the thinner ven
 
 Scale-in size is the USD gap to target, **capped to paired L2 depth** that still prints at least that entry rung. Flatten / TP sends the full reduce (fill both first).
 
-Isolated OAI is pinned at **3×**, so spare USDC sits withdrawable and does not move the liq price. When Entropy OAI is **≤10%** from liquidation, the trader adds free USDC into isolated until room-to-liq is **~15%**, or until withdrawable is gone. Each top-up (and a halt when free is depleted) pings the **risk chat**. **Enter / scale** then require Hyperliquid withdrawable ≥ `clip / 3` so SoftBank cannot fire if OAI cannot; take-profit / flatten still run.
+Isolated OAI is pinned at **3×**, so spare USDC sits withdrawable and does not move the liq price. When Entropy OAI is **≤10%** from liquidation, the trader adds free USDC into isolated until room-to-liq is **~15%**, or until withdrawable is gone. Each top-up (and a halt when free is depleted) pings the **risk chat**. **Enter / scale** require `isolated + free` to cover the new notional at 3× (isolated surplus counts; withdrawable is only needed past that). SoftBank does not fire if OAI cannot; take-profit / flatten still run.
 
 Above mid: short OAI / long SoftBank. Below mid: long OAI / short SoftBank.
 

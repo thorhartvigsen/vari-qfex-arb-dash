@@ -64,9 +64,33 @@ export function clipInitialMarginUsd(clipUsd: number): number {
   return Math.abs(clipUsd) / OAI_ISOLATED_LEV;
 }
 
-/** HL pulls extra isolated IM from withdrawable on a size increase. */
-export function canFundIsolatedClip(freeUsd: number, clipUsd: number): boolean {
-  return freeUsd + 1e-6 >= clipInitialMarginUsd(clipUsd);
+export function isolatedCapacityUsd(isolatedUsd: number, freeUsd: number): number {
+  return Math.max(0, isolatedUsd + freeUsd) * OAI_ISOLATED_LEV;
+}
+
+/**
+ * Isolated surplus already on the position can fund a size increase.
+ * Withdrawable is only needed when new notional would exceed isolated×3.
+ */
+export function canFundIsolatedClip(opts: {
+  isolatedUsd: number;
+  freeUsd: number;
+  currentNotionalUsd: number;
+  clipUsd: number;
+}): { ok: boolean; capacityUsd: number; newNotionalUsd: number; extraImUsd: number } {
+  const newNotionalUsd =
+    Math.abs(opts.currentNotionalUsd) + Math.abs(opts.clipUsd);
+  const capacityUsd = isolatedCapacityUsd(opts.isolatedUsd, opts.freeUsd);
+  const extraImUsd = Math.max(
+    0,
+    newNotionalUsd / OAI_ISOLATED_LEV - Math.max(0, opts.isolatedUsd),
+  );
+  return {
+    ok: newNotionalUsd <= capacityUsd + 1,
+    capacityUsd,
+    newNotionalUsd,
+    extraImUsd,
+  };
 }
 
 export function isolatedFreeDepleted(freeUsd: number): boolean {

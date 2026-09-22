@@ -27,7 +27,6 @@ import { esc, telegramSend } from "../telegram.ts";
 import type { HlExecClient, HlOrderResult } from "./hlExec.ts";
 import {
   canFundIsolatedClip,
-  clipInitialMarginUsd,
   distToLiqPct,
   isolatedFreeDepleted,
   isolatedTopUpUsd,
@@ -221,7 +220,7 @@ export async function sendTraderStarted(live: boolean, dry: boolean): Promise<vo
       `Max ${MAX_LEV}× of min venue equity`,
       `Scale-in: ${formatLevBands()}`,
       `Take-profit: ${formatExitBands()}`,
-      `Isolated OAI: top-up at ${LIQ_TOPUP_TRIGGER_PCT}% from liq → ${LIQ_TOPUP_TARGET_PCT}% · enter/scale skip if HL free cannot fund the clip`,
+      `Isolated OAI: top-up at ${LIQ_TOPUP_TRIGGER_PCT}% from liq → ${LIQ_TOPUP_TARGET_PCT}% · enter/scale skip if isolated+free cannot fund 3×`,
     ].join("\n"),
   );
 }
@@ -245,7 +244,7 @@ async function maybeProtectIsolated(
   const distPct = plan.distPct;
 
   if (distPct == null || distPct > LIQ_TOPUP_TRIGGER_PCT) {
-    if (rt.marginAlertKey?.startsWith("halt-")) rt.marginAlertKey = null;
+    if (rt.marginAlertKey === "halt-depleted") rt.marginAlertKey = null;
     return { pos, skipTrade: false };
   }
 
@@ -311,6 +310,7 @@ function haltEnterScale(
   pos: BookPositions,
   mark: number,
   dOai: number,
+  oaiNow: number,
 ): { key: string; log: string; telegram: string } | null {
   const distPct = distToLiqPct(pos.oai.size, mark, pos.oai.liqPx);
   if (
@@ -331,17 +331,23 @@ function haltEnterScale(
       ].join("\n"),
     };
   }
-  if (!canFundIsolatedClip(pos.oaiFreeUsd, dOai)) {
-    const need = clipInitialMarginUsd(dOai);
+  const fund = canFundIsolatedClip({
+    isolatedUsd: pos.oaiIsolatedUsd,
+    freeUsd: pos.oaiFreeUsd,
+    currentNotionalUsd: oaiNow,
+    clipUsd: dOai,
+  });
+  if (!fund.ok) {
     return {
       key: "halt-nofund",
-      log: `iso halt no-fund clip ${fmtUsdAbs(dOai)} need IM ${fmtUsdAbs(need)} free ${fmtUsdAbs(pos.oaiFreeUsd)}`,
+      log: `iso halt no-fund clip ${fmtUsdAbs(dOai)} new ${fmtUsdAbs(fund.newNotionalUsd)} cap ${fmtUsdAbs(fund.capacityUsd)} iso ${fmtUsdAbs(pos.oaiIsolatedUsd)}+free ${fmtUsdAbs(pos.oaiFreeUsd)}`,
       telegram: [
         "🛑 <b>HL cannot fund clip · OAI</b>",
         "",
-        `Need ${esc(fmtUsdAbs(need))} IM for ${esc(fmtUsdAbs(dOai))} clip · free ${esc(fmtUsdAbs(pos.oaiFreeUsd))}`,
+        `New notional ${esc(fmtUsdAbs(fund.newNotionalUsd))} · 3× cap ${esc(fmtUsdAbs(fund.capacityUsd))}`,
+        `Clip ${esc(fmtUsdAbs(dOai))} · extra IM ${esc(fmtUsdAbs(fund.extraImUsd))}`,
         distPct != null ? `Dist ${esc(fmtPct(distPct))} from liq` : "Dist n/a",
-        `Isolated ${esc(fmtUsdAbs(pos.oaiIsolatedUsd))}`,
+        `Isolated ${esc(fmtUsdAbs(pos.oaiIsolatedUsd))} · free ${esc(fmtUsdAbs(pos.oaiFreeUsd))}`,
         "Enter/scale skipped · SoftBank not sent",
         "TP/flatten still on",
       ].join("\n"),
@@ -490,12 +496,13 @@ async function runTraderTickInner(
 
   if (plan.action === "enter" || plan.action === "scale") {
     if (Math.abs(dOai) > 0) {
-      const halt = haltEnterScale(pos, mids.oai, dOai);
+      const halt = haltEnterScale(pos, mids.oai, dOai, oaiNow);
       if (halt) {
         rt.lastAction = `${halt.log} ${spreadLabel}`;
         await pingMarginOnce(rt, halt.key, halt.telegram);
         return;
       }
+      if (rt.marginAlertKey === "halt-nofund") rt.marginAlertKey = null;
     }
     const minDist = entryMinDistPp(plan.targetLev);
     const needUsd = Math.max(Math.abs(dOai), Math.abs(dSb));
