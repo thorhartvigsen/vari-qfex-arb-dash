@@ -50,8 +50,6 @@ Target leverage vs **|listing-spread − 8 pp|**, max **3×** of the thinner ven
 
 Scale-in size is the USD gap to target, **capped to paired L2 depth** that still prints at least that entry rung. Flatten / TP sends the full reduce (fill both first).
 
-Isolated OAI is pinned at **3×**. Unused io USDC is not in the isolated slice (HIP-3 often reports withdrawable `$0`); Hyperliquid pulls it in on a size increase. We only `updateIsolatedMargin` when room-to-liq is **≤10%**, adding unused cash until **~15%**. That top-up (and a halt when unused is gone at 10%) pings the **risk chat**. **Enter / scale** skip if isolated + unused cannot cover the new notional at 3×, so SoftBank cannot fire unpaired. Take-profit / flatten still run.
-
 Above mid: short OAI / long SoftBank. Below mid: long OAI / short SoftBank.
 
 Heartbeat to the dash (green light):

@@ -38,7 +38,6 @@ interface HlClearinghouse {
       entryPx?: string;
       unrealizedPnl?: string;
       marginUsed?: string;
-      liquidationPx?: string | null;
       leverage?: {
         type?: string;
         value?: number;
@@ -101,10 +100,9 @@ function posNum(pos: HlClearinghouse["assetPositions"], coin: string): {
 }
 
 /**
- * Isolated OAI locks collateral inside the position; unused USDC stays in
- * accountValue. HIP-3 often reports withdrawable=0 for that unused slice.
- * Hyperliquid pulls it into isolated automatically on a size increase.
- * We only `updateIsolatedMargin` on the 10%→15% liq top-up.
+ * Isolated OAI locks collateral inside the position; withdrawable is the rest.
+ * `marginSummary.accountValue` should already be isolated + free + uPnL.
+ * Never take max(withdrawable, spot) alone — that drops isolated margin.
  */
 function hlOaiEquity(
   io: HlClearinghouse,
@@ -112,11 +110,9 @@ function hlOaiEquity(
   isolatedUsd: number,
 ): { equity: number; isolatedUsd: number; freeUsd: number } {
   const account = num(io.marginSummary?.accountValue) ?? 0;
-  const unusedIo = Math.max(0, account - isolatedUsd);
   const freeUsd = Math.max(
     num(io.withdrawable) ?? 0,
     num(io.crossMarginSummary?.accountValue) ?? 0,
-    unusedIo,
   );
   const spotUsdc =
     num((spot.balances ?? []).find((row) => row.coin === "USDC")?.total) ?? 0;
@@ -132,7 +128,6 @@ export interface VenuePosition {
   size: number;
   entry: number | null;
   uPnl: number | null;
-  liqPx: number | null;
 }
 
 export interface BookPositions {
@@ -175,13 +170,11 @@ export async function fetchBookPositions(): Promise<BookPositions> {
       size: num(oai.raw?.szi) ?? 0,
       entry: num(oai.raw?.entryPx),
       uPnl: num(oai.raw?.unrealizedPnl),
-      liqPx: num(oai.raw?.liquidationPx),
     },
     softbank: {
       size: num(sbRaw?.position) ?? 0,
       entry: num(sbRaw?.average_price),
       uPnl: num(sbRaw?.unrealised_pnl),
-      liqPx: null,
     },
     oaiEquity: hl.equity,
     oaiIsolatedUsd: hl.isolatedUsd,

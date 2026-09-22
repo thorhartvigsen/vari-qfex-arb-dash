@@ -1,9 +1,6 @@
 import {
   HL_SLIPPAGE_SCHEDULE_BPS,
-  LIQ_TOPUP_TARGET_PCT,
-  LIQ_TOPUP_TRIGGER_PCT,
   MAX_LEV,
-  MIN_ISOLATED_TOPUP_USD,
   OAI_COIN,
   OAI_ISOLATED_LEV,
   OAI_PRICE_DECIMALS,
@@ -16,7 +13,6 @@ import {
   fmtPx,
   listingSpreadPp,
   minClipUsd,
-  telegramLiqChatId,
   telegramOrdersChatId,
   traderDryRun,
   traderLive,
@@ -25,12 +21,6 @@ import {
 import type { LiveMids } from "../hl.ts";
 import { esc, telegramSend } from "../telegram.ts";
 import type { HlExecClient, HlOrderResult } from "./hlExec.ts";
-import {
-  canFundIsolatedClip,
-  distToLiqPct,
-  isolatedFreeDepleted,
-  isolatedTopUpUsd,
-} from "./isolatedMargin.ts";
 import {
   availablePairedUsd,
   conservativeEntrySpread,
@@ -41,7 +31,7 @@ import {
   entryWalkSpreadPp,
 } from "./liquidity.ts";
 import type { QfexOrderResult, QfexTradeClient } from "./qfexExec.ts";
-import { fetchBookPositions, type BookPositions } from "./positions.ts";
+import { fetchBookPositions } from "./positions.ts";
 import {
   clipUsd,
   directionLabel,
@@ -70,8 +60,6 @@ export interface TraderHandle {
   lastError: string | null;
   lastAction: string | null;
   busy: boolean;
-  /** Dedupe liq-chat pings for the same halt / top-up state. */
-  marginAlertKey: string | null;
 }
 
 export function emptyTrader(): TraderHandle {
@@ -83,7 +71,6 @@ export function emptyTrader(): TraderHandle {
     lastError: null,
     lastAction: null,
     busy: false,
-    marginAlertKey: null,
   };
 }
 
@@ -128,20 +115,6 @@ function sizeFromDeltaUsd(deltaUsd: number, px: number, decimals: number): {
 
 async function sendOrders(text: string): Promise<void> {
   await telegramSend(telegramOrdersChatId(), text);
-}
-
-async function sendLiq(text: string): Promise<void> {
-  await telegramSend(telegramLiqChatId(), text);
-}
-
-async function pingMarginOnce(
-  rt: TraderHandle,
-  key: string,
-  text: string,
-): Promise<void> {
-  if (rt.marginAlertKey === key) return;
-  rt.marginAlertKey = key;
-  await sendLiq(text);
 }
 
 async function notifyFill(opts: {
@@ -220,140 +193,8 @@ export async function sendTraderStarted(live: boolean, dry: boolean): Promise<vo
       `Max ${MAX_LEV}× of min venue equity`,
       `Scale-in: ${formatLevBands()}`,
       `Take-profit: ${formatExitBands()}`,
-      `Isolated OAI: top-up at ${LIQ_TOPUP_TRIGGER_PCT}% from liq → ${LIQ_TOPUP_TARGET_PCT}% · enter/scale skip if isolated+free cannot fund 3×`,
     ].join("\n"),
   );
-}
-
-function fmtPct(n: number | null): string {
-  if (n == null || !Number.isFinite(n)) return "n/a";
-  return `${n.toFixed(1)}%`;
-}
-
-async function maybeProtectIsolated(
-  rt: TraderHandle,
-  pos: BookPositions,
-  mark: number,
-): Promise<{ pos: BookPositions; skipTrade: boolean }> {
-  const plan = isolatedTopUpUsd({
-    size: pos.oai.size,
-    mark,
-    liq: pos.oai.liqPx,
-    freeUsd: pos.oaiFreeUsd,
-  });
-  const distPct = plan.distPct;
-
-  if (distPct == null || distPct > LIQ_TOPUP_TRIGGER_PCT) {
-    if (rt.marginAlertKey === "halt-depleted") rt.marginAlertKey = null;
-    return { pos, skipTrade: false };
-  }
-
-  if (plan.addUsd >= MIN_ISOLATED_TOPUP_USD) {
-    const live = traderLive() && Boolean(rt.hl);
-    let added = false;
-    if (live) {
-      const res = await rt.hl!.updateIsolatedMarginUsd(plan.addUsd);
-      added = res.ok;
-      if (!res.ok) {
-        console.warn("[trader] isolated top-up failed", res.raw);
-      }
-    }
-    const after = added ? await fetchBookPositions() : pos;
-    const afterDist = distToLiqPct(after.oai.size, mark, after.oai.liqPx);
-    rt.lastAction = `iso top-up ${fmtUsdAbs(plan.addUsd)} dist ${fmtPct(distPct)}→${fmtPct(afterDist)} free ${fmtUsdAbs(after.oaiFreeUsd)}`;
-    const body = [
-      live
-        ? added
-          ? "🛡 <b>Isolated margin top-up · OAI</b>"
-          : "⚠️ <b>Isolated top-up failed · OAI</b>"
-        : "🧪 <b>DRY — would top-up isolated OAI</b>",
-      "",
-      `Dist ${esc(fmtPct(distPct))} from liq → targeting ${LIQ_TOPUP_TARGET_PCT}%`,
-      `Add ${esc(fmtUsdAbs(plan.addUsd))}`,
-      `Isolated ${esc(fmtUsdAbs(pos.oaiIsolatedUsd))} · free ${esc(fmtUsdAbs(pos.oaiFreeUsd))} → ${esc(fmtUsdAbs(after.oaiFreeUsd))}`,
-      afterDist != null && afterDist > LIQ_TOPUP_TRIGGER_PCT
-        ? "Enter/scale still on"
-        : isolatedFreeDepleted(after.oaiFreeUsd)
-          ? "Enter/scale paused · TP/flatten still on"
-          : "Will retry top-up next tick",
-    ].join("\n");
-    if (added) {
-      rt.marginAlertKey = null;
-      await sendLiq(body);
-    } else {
-      await pingMarginOnce(rt, live ? "halt-topup-fail" : "topup-dry", body);
-    }
-    return { pos: after, skipTrade: true };
-  }
-
-  if (isolatedFreeDepleted(pos.oaiFreeUsd)) {
-    rt.lastAction = `iso halt depleted dist ${fmtPct(distPct)} free ${fmtUsdAbs(pos.oaiFreeUsd)}`;
-    await pingMarginOnce(
-      rt,
-      "halt-depleted",
-      [
-        "🛑 <b>HL free margin depleted · OAI</b>",
-        "",
-        `Dist ${esc(fmtPct(distPct))} from liq (target ${LIQ_TOPUP_TARGET_PCT}%)`,
-        `Isolated ${esc(fmtUsdAbs(pos.oaiIsolatedUsd))} · free ${esc(fmtUsdAbs(pos.oaiFreeUsd))}`,
-        "Could not add enough to reach 15%",
-        "Enter/scale paused · TP/flatten still on",
-        "SoftBank will not fire unpaired",
-      ].join("\n"),
-    );
-  }
-
-  return { pos, skipTrade: false };
-}
-
-function haltEnterScale(
-  pos: BookPositions,
-  mark: number,
-  dOai: number,
-  oaiNow: number,
-): { key: string; log: string; telegram: string } | null {
-  const distPct = distToLiqPct(pos.oai.size, mark, pos.oai.liqPx);
-  if (
-    distPct != null &&
-    distPct <= LIQ_TOPUP_TRIGGER_PCT &&
-    isolatedFreeDepleted(pos.oaiFreeUsd)
-  ) {
-    return {
-      key: "halt-depleted",
-      log: `iso halt dist ${fmtPct(distPct)} free ${fmtUsdAbs(pos.oaiFreeUsd)}`,
-      telegram: [
-        "🛑 <b>HL free margin depleted · OAI</b>",
-        "",
-        `Dist ${esc(fmtPct(distPct))} from liq (target ${LIQ_TOPUP_TARGET_PCT}%)`,
-        `Isolated ${esc(fmtUsdAbs(pos.oaiIsolatedUsd))} · free ${esc(fmtUsdAbs(pos.oaiFreeUsd))}`,
-        "Enter/scale paused · TP/flatten still on",
-        "SoftBank will not fire unpaired",
-      ].join("\n"),
-    };
-  }
-  const fund = canFundIsolatedClip({
-    isolatedUsd: pos.oaiIsolatedUsd,
-    freeUsd: pos.oaiFreeUsd,
-    currentNotionalUsd: oaiNow,
-    clipUsd: dOai,
-  });
-  if (!fund.ok) {
-    return {
-      key: "halt-nofund",
-      log: `iso halt no-fund clip ${fmtUsdAbs(dOai)} new ${fmtUsdAbs(fund.newNotionalUsd)} cap ${fmtUsdAbs(fund.capacityUsd)} iso ${fmtUsdAbs(pos.oaiIsolatedUsd)}+free ${fmtUsdAbs(pos.oaiFreeUsd)}`,
-      telegram: [
-        "🛑 <b>HL cannot fund clip · OAI</b>",
-        "",
-        `New notional ${esc(fmtUsdAbs(fund.newNotionalUsd))} · 3× cap ${esc(fmtUsdAbs(fund.capacityUsd))}`,
-        `Clip ${esc(fmtUsdAbs(dOai))} · extra IM ${esc(fmtUsdAbs(fund.extraImUsd))}`,
-        distPct != null ? `Dist ${esc(fmtPct(distPct))} from liq` : "Dist n/a",
-        `Isolated ${esc(fmtUsdAbs(pos.oaiIsolatedUsd))} · unused ${esc(fmtUsdAbs(pos.oaiFreeUsd))}`,
-        "Enter/scale skipped · SoftBank not sent",
-        "TP/flatten still on",
-      ].join("\n"),
-    };
-  }
-  return null;
 }
 
 export async function runTraderTick(
@@ -390,10 +231,7 @@ async function runTraderTickInner(
   const midSpread = listingSpreadPp(mids.oai, mids.sbUsd, oaiBase, sbBase);
   if (midSpread == null) throw new Error("spread null");
 
-  const fetched = await fetchBookPositions();
-  const protectedPos = await maybeProtectIsolated(rt, fetched, mids.oai);
-  if (protectedPos.skipTrade) return;
-  const pos = protectedPos.pos;
+  const pos = await fetchBookPositions();
   const oaiNow = signedNotional(pos.oai.size, mids.oai);
   const sbNow = signedNotional(pos.softbank.size, mids.sbJpy);
   const baseUsd = Math.min(pos.oaiEquity, pos.sbEquity);
@@ -482,8 +320,7 @@ async function runTraderTickInner(
   let wanted = targetSignedUsd(dir, targetUsd);
   let dOai = clipUsd(wanted.oaiUsd - oaiNow);
   let dSb = clipUsd(wanted.sbUsd - sbNow);
-  const oaiDist = distToLiqPct(pos.oai.size, mids.oai, pos.oai.liqPx);
-  const spreadLabel = `mid ${fmtPp(midSpread)} shortTOB ${fmtPp(shortTob)} $1k ${fmtPp(shortWalk.spreadPp)} exec ${fmtPp(touchSpread)} unwind ${fmtPp(unwindSpread)} eq iso ${fmtUsdAbs(pos.oaiIsolatedUsd)}+free ${fmtUsdAbs(pos.oaiFreeUsd)}=${fmtUsdAbs(pos.oaiEquity)} / ${fmtUsdAbs(pos.sbEquity)} dist ${fmtPct(oaiDist)}`;
+  const spreadLabel = `mid ${fmtPp(midSpread)} shortTOB ${fmtPp(shortTob)} $1k ${fmtPp(shortWalk.spreadPp)} exec ${fmtPp(touchSpread)} unwind ${fmtPp(unwindSpread)} eq iso ${fmtUsdAbs(pos.oaiIsolatedUsd)}+free ${fmtUsdAbs(pos.oaiFreeUsd)}=${fmtUsdAbs(pos.oaiEquity)} / ${fmtUsdAbs(pos.sbEquity)}`;
 
   if (plan.action === "hold") {
     rt.lastAction = `hold ${dir} ${plan.currentLev.toFixed(2)}× ${spreadLabel} (entry ${plan.entryLev}× / tp ${plan.exitLev}×)`;
@@ -495,15 +332,6 @@ async function runTraderTickInner(
   }
 
   if (plan.action === "enter" || plan.action === "scale") {
-    if (Math.abs(dOai) > 0) {
-      const halt = haltEnterScale(pos, mids.oai, dOai, oaiNow);
-      if (halt) {
-        rt.lastAction = `${halt.log} ${spreadLabel}`;
-        await pingMarginOnce(rt, halt.key, halt.telegram);
-        return;
-      }
-      if (rt.marginAlertKey === "halt-nofund") rt.marginAlertKey = null;
-    }
     const minDist = entryMinDistPp(plan.targetLev);
     const needUsd = Math.max(Math.abs(dOai), Math.abs(dSb));
     const avail = availablePairedUsd({
