@@ -48,6 +48,8 @@ export interface DexLeg {
   side: Side | "flat";
   entryPrice: number | null;
   unrealizedPnl: number | null;
+  /** Venue USDC equity used for effective leverage. */
+  equityUsd?: number | null;
 }
 
 export interface OaiSbPositionsPayload {

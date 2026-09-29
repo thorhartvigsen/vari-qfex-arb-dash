@@ -2,7 +2,7 @@
 
 import { useMemo } from "react";
 import { QuoteColumn, tone } from "@/components/arbUi";
-import { formatPp, formatPrice, formatSigned } from "@/lib/format";
+import { formatPp, formatPrice, formatSigned, formatUsd } from "@/lib/format";
 import {
   CONVERGE_PP,
   JPY_DECIMALS,
@@ -44,12 +44,32 @@ function formatSize(size: number | null | undefined): string {
   return `${sign}${size.toLocaleString(undefined, { maximumFractionDigits: 4 })}`;
 }
 
+function notionalUsd(
+  size: number,
+  mark: number | null | undefined,
+  entry: number | null | undefined,
+): number | null {
+  const px = mark != null && mark > 0 ? mark : entry;
+  if (!(Math.abs(size) > 0) || px == null || !(px > 0)) return 0;
+  return Math.abs(size) * px;
+}
+
+function effectiveLev(
+  notional: number | null,
+  equity: number | null | undefined,
+): number | null {
+  if (notional == null || !(equity != null && equity > 0)) return null;
+  if (!(notional > 0)) return 0;
+  return notional / equity;
+}
+
 function LegSummary({
   label,
   accent,
   coin,
   decimals,
   leg,
+  mark,
   pricePrefix = "",
   usdHint,
 }: {
@@ -58,11 +78,14 @@ function LegSummary({
   coin: string;
   decimals: number;
   leg: DexLeg | null;
+  mark: number | null;
   pricePrefix?: string;
   usdHint?: string | null;
 }) {
   const side = leg?.side ?? "flat";
   const size = leg?.size ?? 0;
+  const dollars = notionalUsd(size, mark, leg?.entryPrice);
+  const lev = effectiveLev(dollars, leg?.equityUsd);
   return (
     <div className="space-y-1">
       <p className="text-sm font-medium" style={{ color: accent }}>
@@ -74,6 +97,11 @@ function LegSummary({
       <p className="font-mono text-lg" style={{ color: "var(--arb-light)" }}>
         {side === "flat" ? "Flat" : side === "long" ? "Long" : "Short"}
         {side !== "flat" ? `  ·  ${formatSize(Math.abs(size))}` : ""}
+      </p>
+      <p className="font-mono text-sm" style={{ color: "var(--arb-light)" }}>
+        {formatUsd(dollars, 0)}
+        {"  ·  "}
+        {lev == null ? "—×" : `${lev.toFixed(2)}×`}
       </p>
       <p className="font-mono text-sm" style={{ opacity: 0.85 }}>
         Entry {pricePrefix}
@@ -355,6 +383,7 @@ export default function OaiSoftbankCard({
             coin={OAI_COIN}
             decimals={OAI_DECIMALS}
             leg={oaiLeg}
+            mark={oaiMid}
           />
           <LegSummary
             label="QFEX"
@@ -362,6 +391,7 @@ export default function OaiSoftbankCard({
             coin={SB_SYMBOL}
             decimals={SB_DECIMALS}
             leg={sbLeg}
+            mark={sbJpyMid}
             pricePrefix="¥"
             usdHint={sbUsdHint}
           />
