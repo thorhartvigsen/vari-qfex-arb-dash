@@ -170,7 +170,12 @@ export function planBook(
       action: currentLev < eps ? "enter" : "scale",
     };
   }
-  if (currentLev - eps > exitLev) {
+  /**
+   * TP only after the unwind print is inside a sub-max EXIT band.
+   * At +26% and wider, EXIT still allows 3× — do not buy back just because
+   * OAI's dollar notional grew through the mark (or isolated margin changed).
+   */
+  if (currentLev - eps > exitLev && exitLev < MAX_LEV - eps) {
     return {
       dir: posDir,
       targetLev: exitLev,
@@ -257,9 +262,12 @@ export function formatActivatedRung(
     return `8% for flatten`;
   }
   const tiers = action === "take_profit" ? EXIT_TIERS : LEV_TIERS;
-  let dist = 0;
+  let dist = action === "take_profit" ? 0 : LEV_TIERS[LEV_TIERS.length - 1]!.distPp;
   for (const tier of tiers) {
     if (Math.abs(tier.lev - targetLev) < 1e-9) dist = tier.distPp;
+  }
+  if (action === "take_profit" && dist === 0 && targetLev >= MAX_LEV - 1e-9) {
+    dist = LEV_TIERS[LEV_TIERS.length - 1]!.distPp;
   }
   const print = dir === "long_oai" ? MID_PP - dist : MID_PP + dist;
   const label = Number.isInteger(print) ? `${print}` : `${print}`;

@@ -324,8 +324,13 @@ function clusterExecutions(
     if (Math.abs(oaiPos) < 1e-6) oaiPos = 0;
   }
 
+  const oldestSb = fills
+    .filter((f) => f.coin === SB_SYMBOL)
+    .reduce((min, f) => Math.min(min, f.time), Number.POSITIVE_INFINITY);
+
   return rows
     .filter((row) => !isTinyOneLeg(row))
+    .filter((row) => !isOrphanOaiLeg(row, oldestSb))
     .sort((a, b) => b.time - a.time);
 }
 
@@ -334,6 +339,14 @@ const TINY_ONE_LEG_USD = 1_000;
 function isTinyOneLeg(row: OaiSbExecution): boolean {
   if (row.kind !== "flat") return false;
   return Math.abs(row.oaiNotional) + Math.abs(row.sbNotional) < TINY_ONE_LEG_USD;
+}
+
+/** QFEX trade history truncates; leftover HL-only rows look like one-leg hedges. */
+function isOrphanOaiLeg(row: OaiSbExecution, oldestSb: number): boolean {
+  if (row.kind !== "flat") return false;
+  if (!(row.oaiSize > 0) || row.sbSize > 0) return false;
+  if (!Number.isFinite(oldestSb)) return false;
+  return row.time < oldestSb;
 }
 
 export async function fetchOaiSoftbankFills(): Promise<OaiSbFillsPayload> {
@@ -348,7 +361,7 @@ export async function fetchOaiSoftbankFills(): Promise<OaiSbFillsPayload> {
     }),
     postFills({ type: "userFills", user: wallet }),
     qfexAuthedGet<QfexTradesResponse>(
-      `/user/trade?symbol=${encodeURIComponent(SB_SYMBOL)}&limit=100`,
+      `/user/trade?symbol=${encodeURIComponent(SB_SYMBOL)}&limit=1000`,
     ),
     fetchUsdJpy5m(FILLS_FROM_MS, Date.now()),
   ]);
