@@ -75,11 +75,14 @@ export function QuoteColumn({
   const bid = book?.bid ?? null;
   const ask = book?.ask ?? null;
   const mid =
-    bid !== null && ask !== null ? (bid + ask) / 2 : (book?.mark ?? null);
+    bid !== null && ask !== null && bid > 0 && ask > 0
+      ? (bid + ask) / 2
+      : (book?.mark ?? null);
   const spread =
     bid !== null && ask !== null && mid && mid > 0
       ? ((ask - bid) / mid) * 10_000
       : null;
+  const noBook = (bid == null || ask == null) && mid != null;
   const ageLabel =
     showAge && book?.updatedAt ? formatAge(book.updatedAt) : null;
 
@@ -91,6 +94,7 @@ export function QuoteColumn({
         </p>
         <p className="text-xs" style={{ color: "var(--arb-text)", opacity: 0.75 }}>
           {ageLabel ? `${subtitle} · ${ageLabel}` : subtitle}
+          {noBook ? " · last (no book)" : ""}
         </p>
       </div>
       <div className="grid grid-cols-2 gap-x-8 gap-y-1">

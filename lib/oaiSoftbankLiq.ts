@@ -91,7 +91,9 @@ async function qfexMid(symbol: string): Promise<number | null> {
     bids?: Array<[string | number, string | number]>;
     asks?: Array<[string | number, string | number]>;
   };
-  return bookMid(num(book.bids?.[0]?.[0]), num(book.asks?.[0]?.[0]));
+  const bid = (book.bids ?? []).find((row) => num(row[1]) != null && Number(row[1]) > 0);
+  const ask = (book.asks ?? []).find((row) => num(row[1]) != null && Number(row[1]) > 0);
+  return bookMid(num(bid?.[0]), num(ask?.[0]));
 }
 
 /** QFEX mark/index in quote currency. JPY names PnL in USDC as q × (P_jpy − entry). */

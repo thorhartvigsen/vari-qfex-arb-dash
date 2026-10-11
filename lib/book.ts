@@ -38,6 +38,21 @@ export function topOfBook(levels: BookLevel[]): number | null {
   return Number.isFinite(px) && (px as number) > 0 ? (px as number) : null;
 }
 
+/** Tradable mid, else last/index mark when the book is empty. */
+export function quotePx(book?: {
+  bid?: number | null;
+  ask?: number | null;
+  mark?: number | null;
+} | null): number | null {
+  const bid = book?.bid;
+  const ask = book?.ask;
+  if (bid != null && ask != null && bid > 0 && ask > 0) return (bid + ask) / 2;
+  if (bid != null && bid > 0) return bid;
+  if (ask != null && ask > 0) return ask;
+  const mark = book?.mark;
+  return mark != null && mark > 0 ? mark : null;
+}
+
 export interface WalkResult {
   avgPrice: number;
   filledUsd: number;

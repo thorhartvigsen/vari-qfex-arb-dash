@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import { QuoteColumn, tone } from "@/components/arbUi";
+import { quotePx } from "@/lib/book";
 import { formatPp, formatPrice, formatSigned, formatUsd } from "@/lib/format";
 import {
   CONVERGE_PP,
@@ -14,7 +15,6 @@ import {
   SIZE_USD,
   UPPER_PP,
   adviceFor,
-  bookMid,
   flattenPnlPp,
   hedgeKind,
   jpyBookToUsd,
@@ -208,8 +208,8 @@ export default function OaiSoftbankCard({
   sbBase,
   usdJpy,
 }: OaiSoftbankCardProps) {
-  const oaiMid = bookMid(oaiBook?.bid, oaiBook?.ask);
-  const sbJpyMid = bookMid(sbBook?.bid, sbBook?.ask);
+  const oaiMid = quotePx(oaiBook);
+  const sbJpyMid = quotePx(sbBook);
   const sbUsdMid = jpyToUsd(sbJpyMid, usdJpy);
   const sbUsdBid = jpyToUsd(sbBook?.bid, usdJpy);
   const sbUsdAsk = jpyToUsd(sbBook?.ask, usdJpy);

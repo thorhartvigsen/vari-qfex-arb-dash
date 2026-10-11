@@ -20,6 +20,7 @@ import { useOaiSoftbankPnl } from "@/hooks/useOaiSoftbankPnl";
 import { useOaiSoftbankPositions } from "@/hooks/useOaiSoftbankPositions";
 import { useOaiSoftbankSpread } from "@/hooks/useOaiSoftbankSpread";
 import { useQfexBooks } from "@/hooks/useQfexBooks";
+import { quotePx } from "@/lib/book";
 import { formatClock } from "@/lib/format";
 import {
   FALLBACK_OAI_BASE,
@@ -83,8 +84,8 @@ export default function OaiSoftbankPage() {
   const sbBase = spread?.sbBase ?? FALLBACK_SB_BASE;
   const usdJpy = bookMid(jpyBook?.bid, jpyBook?.ask);
   const liveSpread = listingSpreadPp(
-    bookMid(oaiBook?.bid, oaiBook?.ask),
-    jpyToUsd(bookMid(sbBook?.bid, sbBook?.ask), usdJpy),
+    quotePx(oaiBook),
+    jpyToUsd(quotePx(sbBook), usdJpy),
     oaiBase,
     sbBase,
   );
