@@ -60,7 +60,8 @@ export async function fetchQfexBookSnapshots(
           );
           return [symbol, body] as const;
         } catch {
-          return [symbol, { bids: [], asks: [] }] as const;
+          const empty: QfexBookBody = { bids: [], asks: [] };
+          return [symbol, empty] as const;
         }
       }),
     ),
